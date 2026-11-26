@@ -65,7 +65,7 @@ import ru.sguardo.app.ui.theme.Unbounded
 /** Промо-кадры для Google Play: 1080×1920, кремовый фон, заголовок Unbounded, экран приложения со скруглёнными углами. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w360dp-h640dp-xxhdpi", application = TestApp::class)
+@Config(sdk = [34], qualifiers = "w360dp-h696dp-xxhdpi"  // минус 56dp системных панелей = 640dp = 1920 px, application = TestApp::class)
 class StoreShotsTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var repo: Repo
