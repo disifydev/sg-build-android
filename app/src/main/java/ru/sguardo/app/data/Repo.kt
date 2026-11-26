@@ -170,6 +170,7 @@ class Repo private constructor(private val ctx: Context) {
 
     // ---------- демо ----------
     fun enterDemo(seed: Boolean = true) {
+        if (!ru.sguardo.app.BuildConfig.DEMO_ALLOWED) return // в релизе демо-режима нет
         demo.value = true
         prefs = Prefs(ctx, memory = true)
         prefs.setOnboarded(true)

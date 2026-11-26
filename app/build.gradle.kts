@@ -19,9 +19,21 @@ android {
         applicationId = "ru.sguardo.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 140
-        versionName = "1.4.0"
+        // versionCode — номер прогона GitHub Actions, чтобы каждая сборка для Play была новее предыдущей
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionName = "1.0"
         buildConfigField("String", "BASE_URL", "\"https://sguardo.ru\"")
+    }
+
+    // Ключ загрузки приходит только из секретов CI (UPLOAD_KEYSTORE_*); без них релиз собирается неподписанным.
+    val ksFile = System.getenv("UPLOAD_KEYSTORE_FILE")
+    signingConfigs {
+        if (ksFile != null) create("release") {
+            storeFile = file(ksFile)
+            storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+            keyPassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -29,7 +41,9 @@ android {
             buildConfigField("Boolean", "DEMO_ALLOWED", "true")
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (ksFile != null) signingConfig = signingConfigs.getByName("release")
             buildConfigField("Boolean", "DEMO_ALLOWED", "false")
         }
     }
