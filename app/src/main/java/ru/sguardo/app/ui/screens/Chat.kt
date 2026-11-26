@@ -119,7 +119,7 @@ private sealed class Row2 { data class Day(val label: String, val key: String) :
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatScreen(id: String) {
+fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? = null) {
     val repo = LocalRepo.current; val nav = LocalNav.current; val ov = LocalOv.current; val perms = LocalPerms.current
     val ctx = LocalContext.current
     val st by repo.state.collectAsState()
@@ -137,12 +137,12 @@ fun ChatScreen(id: String) {
     val contact = repo.contact(conv.contactId)
     val msgs = remember(st, history, pendingAll) { repo.messages(id) }
     val text = remember(id) { mutableStateOf(repo.drafts.value[id] ?: "") }
-    var reply by remember(id) { mutableStateOf<String?>(null) }
+    var reply by remember(id) { mutableStateOf(initialReply) }
     var edit by remember(id) { mutableStateOf<String?>(null) }
     var sel by remember(id) { mutableStateOf<Set<String>?>(null) }
     var tpl by remember(id) { mutableStateOf(false) }
     var hidden by remember { mutableStateOf<String?>(null) }
-    val rec = remember { mutableStateOf<RecState?>(null) }
+    val rec = remember { mutableStateOf(initialRec) }
     val cam = remember { CircleCam() }
     val voice = remember { VoiceRecorder(ctx.applicationContext) }
     val bounds = remember { mutableStateMapOf<String, Float>() }

@@ -112,7 +112,7 @@ fun SubTopBar(title: String, onBack: () -> Unit, scrolled: Boolean = false, back
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconBtn(backIcon, onBack)
-        T(title, disp(22), modifier = Modifier.weight(1f).padding(start = 4.dp), maxLines = 1)
+        FitText(title, disp(22), modifier = Modifier.weight(1f).padding(start = 4.dp))
         actions()
     }
 }

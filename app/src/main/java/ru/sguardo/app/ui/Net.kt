@@ -98,7 +98,7 @@ fun NetDot(net: String, size: Dp, modifier: Modifier = Modifier) {
 
 private val PAL = listOf(0xFFE3D9C6, 0xFFC9D9E0, 0xFFF2C7B0, 0xFFD9D0EA, 0xFFC7E2D3, 0xFFF1E0A8, 0xFFEFC4C4, 0xFFD6E3C6).map { Color(it) }
 fun colFor(name: String): Color = PAL[name.sumOf { it.code } % PAL.size]
-fun initials(name: String) = name.split(Regex("\\s+")).filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }.uppercase()
+fun initials(name: String) = name.split(Regex("\\s+")).mapNotNull { w -> w.firstOrNull { it.isLetterOrDigit() } }.take(2).joinToString("").uppercase()
 
 /** Аватар: инициалы на пастельном круге, значок сети в углу (как .av и .nb). */
 @Composable

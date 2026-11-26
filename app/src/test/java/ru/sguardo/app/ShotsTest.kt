@@ -58,6 +58,13 @@ import ru.sguardo.app.ui.screens.SecurityScreen
 import ru.sguardo.app.ui.screens.SplashScreen
 import ru.sguardo.app.ui.screens.StaffScreen
 import ru.sguardo.app.ui.screens.askDeleteChat
+import ru.sguardo.app.ui.screens.openAttach
+import ru.sguardo.app.ui.screens.openLater
+import ru.sguardo.app.ui.screens.RecState
+import ru.sguardo.app.ui.NoPermissions
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import ru.sguardo.app.ui.theme.Sg
 import ru.sguardo.app.ui.theme.SgTheme
 
@@ -141,4 +148,17 @@ class ShotsTest(private val theme: String) {
     @Test fun s33_empty() { repo.state.value = repo.state.value.copy(deals = emptyList()); ui.tab = "pays"; shot("33_state_empty") { Tab { PaysScreen() } } }
     @Test fun s34_offline() { repo.online.value = false; ui.tab = "home"; shot("34_state_offline") { Tab { HomeScreen() } } }
     @Test fun s35_chat_maria() = shot("35_chat_maria") { ChatScreen("maria") }
+    @Test fun s36_chat_voice() = shot("36_chat_whatsapp_voice") { ChatScreen("irina", initialReply = "m19") }
+    @Test fun s37_msg_context() {
+        shot("37_message_menu_pre", advance = 800) { ChatScreen("maria") }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithText("А рассрочка есть?").performTouchInput { longClick() }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onRoot().captureRoboImage("screenshots/$theme/37_message_menu.png")
+    }
+    @Test fun s38_attach() { openAttach(ov, repo, NoPermissions, ApplicationProvider.getApplicationContext(), "anna") {}; shot("38_sheet_attach") { ChatScreen("anna") } }
+    @Test fun s39_later() { openLater(ov, repo, ApplicationProvider.getApplicationContext(), "anna", "Пришлю ссылку", null) {}; shot("39_sheet_send_later") { ChatScreen("anna") } }
+    @Test fun s40_rec_voice() = shot("40_recording_voice") { ChatScreen("maria", initialRec = RecState(false, Clock.now() - 3200).also { it.dx = -30f }) }
+    @Test fun s41_rec_circle() = shot("41_recording_circle") { ChatScreen("maria", initialRec = RecState(true, Clock.now()).also { it.locked = true }) }
 }
