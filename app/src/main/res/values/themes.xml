@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.Sguardo" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/surface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <style name="Theme.Sguardo.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/surface</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sguardo</item>
+    </style>
+</resources>

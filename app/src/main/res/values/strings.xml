@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Sguardo</string>
+    <string name="channel_messages">Сообщения клиентов</string>
+    <string name="channel_reminders">Напоминания</string>
+</resources>
