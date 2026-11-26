@@ -169,7 +169,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     }
     val finishRec: (RecState, Boolean) -> Unit = { r, send ->
         rec.value = null
-        val secs = (Clock.now() - r.started) / 1000f
+        val secs = (System.currentTimeMillis() - r.started) / 1000f
         if (repo.demo.value) {
             if (send && secs >= .7f) repo.sendFile(id, File(""), if (r.circle) "circle.mp4" else "voice.m4a", "", if (r.circle) "video" else "audio", r.circle, secs.roundToInt().coerceAtLeast(1))
             else if (send) repo.toast(if (r.circle) "Удерживайте, чтобы записать кружок" else "Удерживайте, чтобы записать голосовое")

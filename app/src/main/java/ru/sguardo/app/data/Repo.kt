@@ -668,7 +668,7 @@ class Repo private constructor(private val ctx: Context) {
 
     // ---------- push ----------
     fun registerPushIfPossible() {
-        if (demo.value || phase.value != Phase.Ready) return
+        if (demo.value || phase.value != Phase.Ready || !prefs.notifyMessages.value) return
         try {
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { t -> if (t != null) registerToken(t) }
         } catch (_: Throwable) { /* Firebase не настроен (сборка без google-services.json) */ }

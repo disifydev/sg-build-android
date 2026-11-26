@@ -206,7 +206,7 @@ fun Composer(
                                 repo.toast(if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
                                 return@awaitEachGesture
                             }
-                            val r = RecState(circleMode, Clock.now())
+                            val r = RecState(circleMode, System.currentTimeMillis())
                             var ok = true
                             if (!repo.demo.value) {
                                 ok = if (circleMode) perms.hasCamera() && perms.hasAudio() else perms.hasAudio()
@@ -248,7 +248,7 @@ private fun SmallBtn(icon: String, onClick: () -> Unit, tint: Color = Sg.c.muted
 @Composable
 private fun RecUi(r: RecState, onCancel: () -> Unit) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val t0 = remember { System.currentTimeMillis() }
+    val t0 = r.started
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(50) } }
     val inf = rememberInfiniteTransition(label = "blink")
     val a by inf.animateFloat(1f, .2f, infiniteRepeatable(tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "a")
@@ -295,38 +295,48 @@ private fun BigMic(r: RecState, modifier: Modifier, onSend: () -> Unit) {
 }
 
 /** Запись кружка: круглое превью камеры, кольцо прогресса до 60 с, вспышка и смена камеры. */
+@OptIn(androidx.camera.video.ExperimentalPersistentRecording::class)
 @Composable
 fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val t0 = remember { System.currentTimeMillis() }
-    var now by remember { mutableLongStateOf(t0) }
+    val t0 = r.started
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(50) } }
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = .7f, stiffness = 300f)) }
     val flip = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val vc = remember { VideoCapture.withOutput(Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.SD)).build()) }
     if (!demo) DisposableEffect(r.back) {
         val future = ProcessCameraProvider.getInstance(ctx)
         future.addListener({
             try {
                 val provider = future.get()
                 val preview = androidx.camera.core.Preview.Builder().build().also { p -> cam.preview?.let { pv -> p.setSurfaceProvider(pv.surfaceProvider) } }
-                val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.SD)).build()
-                val vc = VideoCapture.withOutput(recorder)
                 provider.unbindAll()
+                // та же VideoCapture и «постоянная» запись: смена камеры не прерывает кружок
                 cam.camera = provider.bindToLifecycle(owner, if (r.back) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA, preview, vc)
                 cam.capture = vc
                 if (cam.recording == null) {
                     val f = File(ctx.cacheDir, "circle-${System.currentTimeMillis()}.mp4"); cam.file = f
                     var pending = vc.output.prepareRecording(ctx, FileOutputOptions.Builder(f).build())
                     if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) pending = pending.withAudioEnabled()
+                    pending = pending.asPersistentRecording()
                     cam.recording = pending.start(ContextCompat.getMainExecutor(ctx)) { e -> if (e is VideoRecordEvent.Finalize) cam.onDone?.invoke(if (e.hasError()) null else f) }
                 }
                 if (r.flash) cam.torch(true)
             } catch (_: Exception) {}
         }, ContextCompat.getMainExecutor(ctx))
         onDispose { }
+    }
+    if (!demo) DisposableEffect(Unit) {
+        onDispose {
+            // даём записи завершиться и отпускаем камеру
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                try { ProcessCameraProvider.getInstance(ctx).get().unbindAll() } catch (_: Exception) {}
+            }, 1500)
+        }
     }
     Box(Modifier.fillMaxSize().background(if (r.flash) Color(0x99FFFAF0) else Color(0x80060C0C)).clickable(enabled = false) {}) {
         val t = (now - t0) / 1000f

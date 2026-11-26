@@ -159,6 +159,6 @@ class ShotsTest(private val theme: String) {
     }
     @Test fun s38_attach() { openAttach(ov, repo, NoPermissions, ApplicationProvider.getApplicationContext(), "anna") {}; shot("38_sheet_attach") { ChatScreen("anna") } }
     @Test fun s39_later() { openLater(ov, repo, ApplicationProvider.getApplicationContext(), "anna", "Пришлю ссылку", null) {}; shot("39_sheet_send_later") { ChatScreen("anna") } }
-    @Test fun s40_rec_voice() = shot("40_recording_voice") { ChatScreen("maria", initialRec = RecState(false, Clock.now() - 3200).also { it.dx = -30f }) }
-    @Test fun s41_rec_circle() = shot("41_recording_circle") { ChatScreen("maria", initialRec = RecState(true, Clock.now()).also { it.locked = true }) }
+    @Test fun s40_rec_voice() = shot("40_recording_voice") { ChatScreen("maria", initialRec = RecState(false, System.currentTimeMillis() - 3200).also { it.dx = -30f }) }
+    @Test fun s41_rec_circle() = shot("41_recording_circle") { ChatScreen("maria", initialRec = RecState(true, System.currentTimeMillis() - 4000).also { it.locked = true }) }
 }
