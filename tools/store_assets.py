@@ -41,3 +41,14 @@ for l in lines:
     d.text((tx, y), l, font=line, fill=MUTED); y += 44
 fg.save(os.path.join(out, "feature-graphic.png"))
 print("ok", out)
+
+# Play принимает скриншоты в 24-битном PNG без альфа-канала
+for name in sorted(os.listdir(out)):
+    if name[0].isdigit() and name.endswith(".png"):
+        p = os.path.join(out, name)
+        im = Image.open(p)
+        if im.mode != "RGB":
+            bg = Image.new("RGB", im.size, CREAM)
+            bg.paste(im, mask=im.split()[3] if im.mode == "RGBA" else None)
+            bg.save(p)
+print("скриншоты без альфы")
