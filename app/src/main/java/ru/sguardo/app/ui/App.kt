@@ -372,8 +372,10 @@ fun DialogCard(d: DialogSpec, close: () -> Unit) {
         T(d.title, body(22f), modifier = Modifier.padding(bottom = 12.dp))
         if (d.text.isNotBlank()) T(d.text, body(13.5f).copy(lineHeight = 19.sp), Sg.c.muted, modifier = Modifier.padding(bottom = 22.dp))
         if (d.check != null) Row(Modifier.padding(bottom = 18.dp).clickable { checked = !checked }, verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked, { checked = it }, colors = CheckboxDefaults.colors(checkedColor = Sg.c.primary, uncheckedColor = Sg.c.outline))
-            T(d.check, body(14.5f), modifier = Modifier.padding(start = 4.dp))
+            CompositionLocalProvider(androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 0.dp) {
+                Checkbox(checked, { checked = it }, colors = CheckboxDefaults.colors(checkedColor = Sg.c.primary, uncheckedColor = Sg.c.outline))
+            }
+            T(d.check, body(14.5f), modifier = Modifier.padding(start = 10.dp))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             T("Отмена", body(14.5f, FontWeight.SemiBold), Sg.c.primary, modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = close).padding(horizontal = 14.dp, vertical = 10.dp))

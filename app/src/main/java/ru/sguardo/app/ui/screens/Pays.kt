@@ -139,7 +139,7 @@ private fun SumCard(tint: Color, label: String, value: Long, money: Boolean, mod
             T(label, body(13f, FontWeight.SemiBold), Sg.c.statInk, maxLines = 1)
         }
         val v = a.value.toLong()
-        T(if (money) Fmt.rub(v) else v.toString(), disp(25), modifier = Modifier.padding(horizontal = 12.dp), maxLines = 1)
+        ru.sguardo.app.ui.FitText(if (money) Fmt.rub(v) else v.toString(), disp(25), modifier = Modifier.padding(horizontal = 12.dp))
     }
 }
 

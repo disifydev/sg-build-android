@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -456,7 +457,7 @@ private fun MsgContext(m: Message, conv: Conversation, topY: Float, close: () ->
             Box(Modifier.graphicsLayer { scaleX = appear.value; scaleY = appear.value }) { BubbleBody(m, conv, compact = false) }
             val ms = remember { Animatable(.5f) }
             LaunchedEffect(Unit) { ms.animateTo(1f, spring(dampingRatio = .6f, stiffness = 400f)) }
-            Column(Modifier.width(236.dp).graphicsLayer { scaleX = ms.value; scaleY = ms.value; alpha = ((ms.value - .5f) * 2).coerceIn(0f, 1f)
+            Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).widthIn(min = 236.dp).graphicsLayer { scaleX = ms.value; scaleY = ms.value; alpha = ((ms.value - .5f) * 2).coerceIn(0f, 1f)
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (m.isOut) 1f else 0f, 0f) }
                 .shadowCompat(6.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Sg.c.c).padding(vertical = 8.dp)) {
                 if (m.isOut && !m.pending) Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {

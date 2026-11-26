@@ -136,6 +136,8 @@ fun MessagesScreen() {
         if (q.isNotEmpty()) cs = cs.filter { (repo.nameOfConv(it) + " " + lastText(it)).lowercase().contains(q) }
         sortConvs(cs)
     }
+    var found by remember { mutableStateOf<List<ru.sguardo.app.data.SearchItem>>(emptyList()) }
+    LaunchedEffect(q) { if (q.length < 2) { found = emptyList(); return@LaunchedEffect }; kotlinx.coroutines.delay(350); found = repo.search(q) }
     val canArch = arch.isNotEmpty() && ui.mf == "all" && q.isEmpty() && ui.net == "all" && ui.fold == "all"
     val density = LocalDensity.current
     var pull by remember { mutableFloatStateOf(0f) }
@@ -188,8 +190,21 @@ fun MessagesScreen() {
                             }
                         }
                     }
-                    if (shown.isEmpty()) item { EmptyState("search", "Ничего не нашли", "Попробуйте другое имя или снимите фильтр") }
+                    if (shown.isEmpty() && found.isEmpty()) item { EmptyState("search", "Ничего не нашли", "Попробуйте другое имя или снимите фильтр") }
                     items(shown, key = { it.id }) { c -> ChatRow(c, archived = false, modifier = Modifier.animateItem()) }
+                    if (found.isNotEmpty()) {
+                        item { T("В сообщениях", body(13f, FontWeight.SemiBold), Sg.c.muted, modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 6.dp)) }
+                        items(found, key = { "s" + it.messageId }) { f ->
+                            Row(Modifier.fillMaxWidth().clickable { nav.chat(f.conversationId) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Avatar(f.name, 40.dp, f.network)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Row { T(f.name, body(15f, FontWeight.SemiBold), maxLines = 1, modifier = Modifier.weight(1f)); T(Fmt.listTime(ru.sguardo.app.data.parseIso(f.at)), body(12.5f), Sg.c.muted) }
+                                    T((if (f.dir == "out") "Вы: " else "") + f.snippet, body(14f), Sg.c.muted, maxLines = 2)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             item { VGap(110.dp) }
@@ -398,7 +413,7 @@ fun ChatPreview(convId: String, close: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Column(Modifier.width(236.dp).shadowCompat(6.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Sg.c.c).padding(vertical = 8.dp)) {
+                Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).widthIn(min = 236.dp).shadowCompat(6.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Sg.c.c).padding(vertical = 8.dp)) {
                     PvItem(if (inBook) "В контактах телефона" else "Добавить в контакты", if (inBook) "check" else "userPlus") {
                         close(); if (!inBook) addToPhoneBook(ctx, repo.nameOf(contact), contact?.phone)
                     }
@@ -418,7 +433,7 @@ fun ChatPreview(convId: String, close: () -> Unit) {
 fun PvItem(text: String, icon: String, danger: Boolean = false, onClick: () -> Unit) {
     val col = if (danger) Sg.c.danger else Sg.c.fg
     Row(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Ic(icon, col, size = 16.dp); Spacer(Modifier.width(14.dp)); T(text, body(15f), col)
+        Ic(icon, col, size = 16.dp); Spacer(Modifier.width(14.dp)); T(text, body(15f), col, maxLines = 1)
     }
 }
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -113,11 +114,11 @@ fun HomeScreen() {
         val s = remember(st, ui.period) { stats(st, ui.period) }
         val per = when (ui.period) { "today" -> "за сегодня"; "week" -> "за неделю"; else -> "за месяц" }
         Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatCard(Sg.c.tBlue, "userPlus", "Новых лидов", Fmt.group(s.leads.toLong()), per, Modifier.weight(1f)) { nav.tab("clients") }
                 StatCard(Sg.c.tGreen, "wallet", "Оплатили", Fmt.group(s.paidCount.toLong()), per, Modifier.weight(1f)) { nav.tab("pays") }
             }
-            if (ui.period == "today") Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (ui.period == "today") Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatCard(Sg.c.tYellow, "trend", "Выручка", Fmt.rub(s.revenue), per, Modifier.weight(1f)) { nav.tab("pays") }
                 StatCard(Sg.c.tLilac, "msgSq", "Ждут ответа", s.waiting.toString(), "клиент написал, мы молчим", Modifier.weight(1f)) { ui.mf = "wait"; nav.tab("msgs") }
             } else StatCard(Sg.c.tYellow, "trend", "Выручка", Fmt.rub(s.revenue), per, Modifier.fillMaxWidth()) { nav.tab("pays") }
@@ -172,10 +173,10 @@ private fun StatHead(tint: Color, icon: String, label: String) {
 /** Карточка сводки (.stat): цифры и подписи слева. */
 @Composable
 fun StatCard(tint: Color, icon: String, label: String, num: String, cap: String, modifier: Modifier = Modifier, minH: Dp = 112.dp, onClick: () -> Unit) {
-    Column(modifier.height(minH).clip(RoundedCornerShape(20.dp)).background(Sg.c.cLow).clickable(onClick = onClick).padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
+    Column(modifier.heightIn(min = minH).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(Sg.c.cLow).clickable(onClick = onClick).padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
         StatHead(tint, icon, label)
         Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Center) {
-            T(num, disp(25), maxLines = 1)
+            ru.sguardo.app.ui.FitText(num, disp(25))
             T(cap, body(12f), Sg.c.muted, maxLines = 2)
         }
     }

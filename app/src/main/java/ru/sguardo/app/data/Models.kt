@@ -283,3 +283,9 @@ fun parseIso(s: String?): Long {
 }
 
 fun isoOf(ms: Long): String = java.time.Instant.ofEpochMilli(ms).toString()
+
+@Serializable
+data class SearchItem(val messageId: String = "", val conversationId: String = "", val contactId: String = "", val name: String = "", val network: String = "", val dir: String = "in", val at: String = "", val snippet: String = "")
+
+@Serializable
+data class SearchResponse(val items: List<SearchItem> = emptyList())

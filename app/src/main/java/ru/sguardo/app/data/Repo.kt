@@ -642,6 +642,13 @@ class Repo private constructor(private val ctx: Context) {
         }
     }
 
+    /** Поиск по тексту сообщений (/api/search); в демо — по локальным сообщениям. */
+    suspend fun search(q: String): List<SearchItem> {
+        if (demo.value) return state.value.conversations.flatMap { c -> c.messages.filter { it.text.contains(q, true) }.map {
+            SearchItem(it.id, c.id, c.contactId, nameOfConv(c), c.network, it.dir, it.at, it.text) } }.take(30)
+        return try { api.get<SearchResponse>("/api/search/", mapOf("q" to q, "limit" to "30")).items } catch (_: Exception) { emptyList() }
+    }
+
     // ---------- связка карточек ----------
     fun loadSuggestions() {
         if (demo.value) return

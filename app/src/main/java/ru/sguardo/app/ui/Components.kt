@@ -53,6 +53,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,27 +142,30 @@ fun MeButton(name: String, onClick: () -> Unit) {
     }
 }
 
-/** Переключатель «Все / Непрочитанные / Ждут ответа» (.seg на Android): контур, бегунок, галочка у выбранного. */
+/** Переключатель «Все / Непрочитанные / Ждут ответа» (.seg на Android): контур, бегунок, галочка у выбранного. Ширина кнопок — по тексту. */
 @Composable
 fun Seg(options: List<Triple<String, String, Int>>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier, hpad: Dp = 16.dp) {
     val idx = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    val weights = options.map { (_, l, n) -> l.length + 6f + (if (n > 0) 3.5f else 0f) }
+    val total = weights.sum()
     BoxWithConstraints(
         modifier.fillMaxWidth().padding(horizontal = hpad).border(1.dp, Sg.c.outline, RoundedCornerShape(22.dp)).padding(3.dp)
     ) {
-        val w = maxWidth / options.size
-        val x by animateDpAsState(w * idx, spring(dampingRatio = 0.62f, stiffness = 420f), label = "seg")
+        val W = maxWidth
+        val x by animateDpAsState(W * (weights.take(idx).sum() / total), spring(dampingRatio = 0.62f, stiffness = 420f), label = "segx")
+        val w by animateDpAsState(W * (weights[idx] / total), spring(dampingRatio = 0.62f, stiffness = 420f), label = "segw")
         Box(Modifier.offset(x = x).width(w).height(36.dp).background(Sg.c.sc, RoundedCornerShape(18.dp)))
         Row(Modifier.fillMaxWidth()) {
-            options.forEach { (k, label, n) ->
+            options.forEachIndexed { i, (k, label, n) ->
                 val on = k == selected
                 Row(
-                    Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(18.dp)).clickable { onSelect(k) }.padding(horizontal = 6.dp),
+                    Modifier.weight(weights[i]).height(36.dp).clip(RoundedCornerShape(18.dp)).clickable { onSelect(k) }.padding(horizontal = 6.dp),
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AnimatedVisibility(on, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
                         Ic("check", if (on) Sg.c.onSc else Sg.c.fg, size = 15.dp, modifier = Modifier.padding(end = 5.dp))
                     }
-                    T(label, body(12.5f, FontWeight.SemiBold), if (on) Sg.c.onSc else Sg.c.fg, maxLines = 1)
+                    T(label, body(12.5f, FontWeight.SemiBold), if (on) Sg.c.onSc else Sg.c.fg, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                     if (n > 0) {
                         Spacer(Modifier.width(5.dp))
                         Box(Modifier.heightIn(min = 18.dp).widthIn(min = 18.dp).background(if (on) Sg.c.onSc else Sg.c.primary, RoundedCornerShape(9.dp)).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
@@ -171,6 +176,14 @@ fun Seg(options: List<Triple<String, String, Int>>, selected: String, onSelect: 
             }
         }
     }
+}
+
+/** Текст, который уменьшается, если не помещается в строку (крупные суммы в карточках). */
+@Composable
+fun FitText(text: String, style: TextStyle, color: Color = Sg.c.fg, modifier: Modifier = Modifier) {
+    var scale by remember(text) { mutableFloatStateOf(1f) }
+    Text(text, style = style.copy(fontSize = style.fontSize * scale), color = color, maxLines = 1, softWrap = false, modifier = modifier,
+        onTextLayout = { if (it.hasVisualOverflow && scale > .55f) scale *= .92f })
 }
 
 /** Чип фильтра (.chip): контур, у выбранного тональная заливка. */
