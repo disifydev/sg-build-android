@@ -298,7 +298,6 @@ fun BottomNav() {
                 .size(40.dp).graphicsLayer { scaleX = sx; scaleY = sy }
                 .drawBehind {
                     drawCircle(circle)
-                    rotate(spin.value) { drawCircle(dotC, with(d) { 3.dp.toPx() }, Offset(size.width / 2, with(d) { 7.dp.toPx() })) }
                 })
         }
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 10.dp)) {

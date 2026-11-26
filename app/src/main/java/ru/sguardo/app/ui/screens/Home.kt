@@ -209,8 +209,8 @@ private fun Chart(data: List<Pair<Int, Int>>) {
                     val col = if (today) Sg.c.fg else Sg.c.muted
                     T(v.toString(), body(9.5f, if (today) FontWeight.Bold else FontWeight.Normal), col, align = TextAlign.Center)
                     Spacer(Modifier.height(4.dp))
-                    val frac = (maxOf(4f, v.toFloat() / mx * 84f) / 100f) * grow.value
-                    Box(Modifier.fillMaxWidth().fillMaxHeight(frac * 1.15f).clip(RoundedCornerShape(7.dp)).background(if (today) Sg.c.teal else Sg.c.fg.copy(alpha = .11f)))
+                    val frac = maxOf(.06f, v.toFloat() / mx) * grow.value
+                    Box(Modifier.fillMaxWidth().height(76.dp * frac).clip(RoundedCornerShape(7.dp)).background(if (today) Sg.c.teal else Sg.c.fg.copy(alpha = .11f)))
                     Spacer(Modifier.height(4.dp))
                     T(day.toString(), body(9.5f, if (today) FontWeight.Bold else FontWeight.Normal), col, align = TextAlign.Center)
                 }
