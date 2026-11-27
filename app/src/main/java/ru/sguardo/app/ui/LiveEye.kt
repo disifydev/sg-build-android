@@ -47,16 +47,16 @@ private const val ROWS = 5
 @Composable
 fun LiveEye(size: Dp, look: Offset? = null, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
-    var frames by remember { mutableStateOf<List<ImageBitmap>?>(null) }
+    fun load(c: Int, r: Int): ImageBitmap? = runCatching {
+        val id = ctx.resources.getIdentifier("eye_g_${c}_$r", "drawable", ctx.packageName)
+        BitmapFactory.decodeResource(ctx.resources, id)?.asImageBitmap()
+    }.getOrNull()
+    val all = android.os.Build.FINGERPRINT == "robolectric"
+    // центральный кадр сразу (чтобы глаз был с первого кадра), остальные следом в фоне; в снимках — все сразу
+    var frames by remember { mutableStateOf<List<ImageBitmap?>>(List(ROWS * COLS) { i -> if (all || i == (ROWS / 2) * COLS + COLS / 2) load(i % COLS, i / COLS) else null }) }
     LaunchedEffect(Unit) {
-        frames = withContext(Dispatchers.IO) {
-            runCatching {
-                (0 until ROWS).flatMap { r -> (0 until COLS).map { c ->
-                    val id = ctx.resources.getIdentifier("eye_g_${c}_$r", "drawable", ctx.packageName)
-                    BitmapFactory.decodeResource(ctx.resources, id).asImageBitmap()
-                } }
-            }.getOrNull()
-        }
+        if (frames.all { it != null }) return@LaunchedEffect
+        frames = withContext(Dispatchers.IO) { List(ROWS * COLS) { i -> frames[i] ?: load(i % COLS, i / COLS) } }
     }
     val gx = remember { Animatable(0f) }
     val gy = remember { Animatable(0f) }
@@ -88,17 +88,18 @@ fun LiveEye(size: Dp, look: Offset? = null, modifier: Modifier = Modifier) {
         val tilt = .42f + sin(bob) * .05f
         ring(cx, cy, ringR, tilt, spin, front = false, w = eyeD * .045f)
         val f = frames
-        if (f != null) {
+        val center = f[(ROWS / 2) * COLS + COLS / 2]
+        if (center != null) {
             val fx = (gx.value + 1) / 2 * (COLS - 1); val fy = (gy.value + 1) / 2 * (ROWS - 1)
             val c0 = floor(fx).toInt().coerceIn(0, COLS - 1); val r0 = floor(fy).toInt().coerceIn(0, ROWS - 1)
             val c1 = (c0 + 1).coerceAtMost(COLS - 1); val r1 = (r0 + 1).coerceAtMost(ROWS - 1)
             val ax = fx - c0; val ay = fy - r0
             // ближайший кадр полностью, соседний по сильнейшей оси — с прозрачностью
-            val main = f[r0 * COLS + c0]
+            val main = f[r0 * COLS + c0] ?: center
             val dst = IntSize(eyeD.toInt(), eyeD.toInt()); val off = IntOffset((cx - eyeD / 2).toInt(), (cy - eyeD / 2).toInt())
             drawImage(main, dstOffset = off, dstSize = dst)
-            if (ax >= ay && ax > .02f) drawImage(f[r0 * COLS + c1], dstOffset = off, dstSize = dst, alpha = ax)
-            else if (ay > .02f) drawImage(f[r1 * COLS + c0], dstOffset = off, dstSize = dst, alpha = ay)
+            if (ax >= ay && ax > .02f) f[r0 * COLS + c1]?.let { drawImage(it, dstOffset = off, dstSize = dst, alpha = ax) }
+            else if (ay > .02f) f[r1 * COLS + c0]?.let { drawImage(it, dstOffset = off, dstSize = dst, alpha = ay) }
         } else {
             drawCircle(Color(0xFFF3F1FF), eyeD / 2, Offset(cx, cy))
         }
