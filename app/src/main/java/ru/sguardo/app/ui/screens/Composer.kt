@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.foundation.layout.windowInsetsPadding
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
@@ -137,6 +138,8 @@ class VoiceRecorder(private val ctx: Context) {
         }
     }
     fun level(): Float = try { (rec?.maxAmplitude ?: 0) / 32767f } catch (_: Exception) { 0f }
+    fun pause() { if (Build.VERSION.SDK_INT >= 24) runCatching { rec?.pause() } }
+    fun resume() { if (Build.VERSION.SDK_INT >= 24) runCatching { rec?.resume() } }
     fun stop(): File? = try {
         rec?.stop(); rec?.release(); rec = null
         file?.takeIf { it.length() > 0 } ?: run { error = "запись получилась пустой"; null }
@@ -154,6 +157,12 @@ class RecState(val circle: Boolean, val started: Long) {
     val levels = androidx.compose.runtime.mutableStateListOf<Float>()
     var flash by mutableStateOf(false)
     var back by mutableStateOf(false)
+    /** пауза в режиме «без рук», как в Telegram */
+    var paused by mutableStateOf(false)
+    private var pausedTotal = 0L
+    private var pauseAt = 0L
+    fun elapsed(now: Long = System.currentTimeMillis()) = now - started - pausedTotal - (if (paused) now - pauseAt else 0L)
+    fun togglePause() { val now = System.currentTimeMillis(); if (paused) { pausedTotal += now - pauseAt; paused = false } else { pauseAt = now; paused = true } }
 }
 
 /** Управление кружком из CameraX: превью, запись в файл, вспышка, смена камеры. */
@@ -258,7 +267,7 @@ fun Composer(
                         SmallBtn("bolt", onTplToggle, tint = if (showTpl) Sg.c.primary else Sg.c.muted)
                         SmallBtn("clock", onLater)
                     }
-                    rec.value?.let { r -> RecUi(r) { onRecDone(r, false) } }
+                    rec.value?.let { r -> if (!r.circle) RecUi(r) { onRecDone(r, false) } }
                 }
                 // кнопка отправки / микрофона: форма 18 → 26 при тексте
                 val radius by animateDpAsState(if (has) 26.dp else 18.dp, label = "r")
@@ -303,7 +312,7 @@ fun Composer(
                     }, label = "send") { k -> Ic(k, Sg.c.onPrimary) }
                 }
             }
-            rec.value?.let { r -> BigMic(r, Modifier.align(Alignment.BottomEnd)) { onRecDone(r, true) } }
+            rec.value?.let { r -> if (!r.circle) BigMic(r, Modifier.align(Alignment.BottomEnd)) { onRecDone(r, true) } }
         }
     }
 }
@@ -316,16 +325,17 @@ private fun SmallBtn(icon: String, onClick: () -> Unit, tint: Color = Sg.c.muted
 /** Полоса записи поверх поля: мигающая точка, время, «Влево — отмена» или «Отмена» на замке. */
 @Composable
 private fun RecUi(r: RecState, onCancel: () -> Unit) {
+    val density = LocalDensity.current.density
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val t0 = r.started
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(50) } }
     val inf = rememberInfiniteTransition(label = "blink")
     val a by inf.animateFloat(1f, .2f, infiniteRepeatable(tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "a")
     val sh by inf.animateFloat(0f, -5f, infiniteRepeatable(tween(700), androidx.compose.animation.core.RepeatMode.Reverse), label = "sh")
-    val t = (now - t0) / 1000f
+    val t = r.elapsed(now) / 1000f
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).background(Sg.c.cHigh).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         if (r.cancelled) Ic("trash", Color(0xFFD93A33), size = 16.dp)
-        else Box(Modifier.size(10.dp).graphicsLayer { alpha = a }.background(Color(0xFFE5484D), CircleShape))
+        else Box(Modifier.size(10.dp).graphicsLayer { alpha = if (r.paused) 1f else a }.background(if (r.paused) Sg.c.muted else Color(0xFFE5484D), CircleShape))
         Spacer(Modifier.width(10.dp))
         T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f), modifier = Modifier.width(50.dp))
         // живая волна громкости (у кружка её нет, как в Telegram)
@@ -347,19 +357,22 @@ private fun RecUi(r: RecState, onCancel: () -> Unit) {
 /** Большой микрофон и замочек (как .bigmic и .lockp). */
 @Composable
 private fun BigMic(r: RecState, modifier: Modifier, onSend: () -> Unit) {
+    val density = LocalDensity.current.density
     val ctx = LocalContext.current
     val lvl = remember { Animatable(0f) }
     LaunchedEffect(r) {
-        while (true) { val target = if (r.level > 0) r.level else (Math.random() * Math.random() * 1.6).toFloat(); lvl.animateTo(target.coerceAtMost(1f), tween(90)); delay(60) }
+        while (true) { val target = if (r.paused) 0f else if (r.level > 0) r.level else (Math.random() * Math.random() * 1.6).toFloat(); lvl.animateTo(target.coerceAtMost(1f), tween(90)); delay(60) }
     }
     val inf = rememberInfiniteTransition(label = "lock")
     val up by inf.animateFloat(0f, -4f, infiniteRepeatable(tween(600), androidx.compose.animation.core.RepeatMode.Reverse), label = "up")
     Box(modifier.offset(22.dp, 22.dp)) {
         // замок над кнопкой
-        val lockH by animateDpAsState(if (r.locked) 42.dp else 84.dp, label = "lh")
-        Column(Modifier.offset(x = 25.dp, y = (-(if (r.locked) 112 else 96)).dp + (r.dy * .75f).coerceAtLeast(-56f).dp).size(42.dp, lockH)
-            .clip(RoundedCornerShape(21.dp)).background(Sg.c.cHigh), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceAround) {
-            Ic(if (r.locked) "lock" else "lockO", Sg.c.fg, size = 16.dp)
+        // замок над кнопкой; после фиксации на его месте пауза, как в Telegram
+        val lockH by animateDpAsState(if (r.locked) 46.dp else 84.dp, label = "lh")
+        Column(Modifier.offset(x = 23.dp, y = (-(if (r.locked) 116 else 96)).dp + (r.dy * .75f).coerceAtLeast(-56f).dp).size(46.dp, lockH)
+            .clip(RoundedCornerShape(23.dp)).background(Sg.c.cHigh).clickable(enabled = r.locked) { r.togglePause() },
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceAround) {
+            AnimatedContent(if (!r.locked) "lockO" else if (r.paused) (if (r.circle) "vcirc" else "mic") else "pause", label = "lk") { k -> Ic(k, Sg.c.fg, size = if (r.locked) 20.dp else 16.dp) }
             if (!r.locked) Ic("chevU", Sg.c.fg, size = 13.dp, modifier = Modifier.offset(y = up.dp))
         }
         Box(Modifier.size(92.dp).offset { IntOffset((r.dx * .55f * density).roundToInt(), (r.dy * .6f * density).roundToInt()) }, contentAlignment = Alignment.Center) {
@@ -374,7 +387,7 @@ private fun BigMic(r: RecState, modifier: Modifier, onSend: () -> Unit) {
 /** Запись кружка: круглое превью камеры, кольцо прогресса до 60 с, вспышка и смена камеры. */
 @OptIn(androidx.camera.video.ExperimentalPersistentRecording::class)
 @Composable
-fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) -> Unit = {}) {
+fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) -> Unit = {}, onCancel: () -> Unit = {}, onSend: () -> Unit = {}) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val t0 = r.started
@@ -428,8 +441,8 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
         }
     }
     Box(Modifier.fillMaxSize().background(if (r.flash) Color(0xE6FFFAF0) else Color(0xE6060C0C)).clickable(enabled = false) {}) {
-        val t = (now - t0) / 1000f
-        Column(Modifier.fillMaxWidth().padding(top = 110.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        val t = r.elapsed(now) / 1000f
+        Column(Modifier.fillMaxWidth().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars).padding(top = 70.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(276.dp).graphicsLayer { scaleX = (.12f + .88f * appear.value) * (1 - flip.value); scaleY = .12f + .88f * appear.value }
                     .let { if (r.flash) it.drawBehind { drawCircle(Color.White.copy(alpha = .95f), size.minDimension / 2 + 16.dp.toPx()) } else it }
@@ -454,24 +467,34 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
                         Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
-                CamBtn("bolt", r.flash) { r.flash = !r.flash; cam.torch(r.flash) }
-                CamBtn("flip", false) {
-                    if (!cam.both) { repoToast(ctx, "Вторая камера не найдена"); return@CamBtn }
-                    scope.launch { flip.animateTo(1f, tween(170)); r.back = !r.back; flip.animateTo(0f, tween(260)) }
-                }
-            }
             Spacer(Modifier.height(18.dp))
             if (!r.locked) T("Вверх — запись без рук", body(13.5f),
                 if (r.flash) Color(0xFF14211F) else Color.White.copy(alpha = .75f), modifier = Modifier.padding(horizontal = 30.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        // низ как в Telegram: смена камеры и вспышка слева над полосой, полоса с таймером и «Отмена», большая кнопка справа
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars)
+            .padding(start = 8.dp, end = 8.dp, bottom = 10.dp)) {
+            Column {
+                Row(Modifier.padding(start = 8.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CamBtn("flip", false) {
+                        if (!cam.both) { repoToast(ctx, "Вторая камера не найдена"); return@CamBtn }
+                        scope.launch { flip.animateTo(1f, tween(170)); r.back = !r.back; flip.animateTo(0f, tween(260)) }
+                    }
+                    CamBtn("bolt", r.flash) { r.flash = !r.flash; cam.torch(r.flash) }
+                }
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f).heightIn(min = 52.dp).clip(RoundedCornerShape(28.dp)).background(Sg.c.cHigh)) { RecUi(r, onCancel) }
+                    Spacer(Modifier.size(52.dp))
+                }
+            }
+            BigMic(r, Modifier.align(Alignment.BottomEnd), onSend)
         }
     }
 }
 
 @Composable
 private fun CamBtn(icon: String, on: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(54.dp).clip(CircleShape).background(if (on) Color.White else Color.White.copy(alpha = .18f)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(46.dp).clip(CircleShape).background(if (on) Color.White else Color.White.copy(alpha = .18f)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Ic(icon, if (on) Color(0xFF111111) else Color.White)
     }
 }

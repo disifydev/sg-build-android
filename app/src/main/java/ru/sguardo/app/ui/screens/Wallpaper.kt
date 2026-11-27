@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -28,8 +29,8 @@ fun ChatWallpaper(modifier: Modifier = Modifier) {
     val c = Sg.c
     val top = lerp(c.surface, c.teal, if (c.dark) .07f else .10f)
     val bottom = lerp(c.surface, c.primary, if (c.dark) .03f else .05f)
-    val ink = c.fg.copy(alpha = if (c.dark) .055f else .065f)
-    Canvas(modifier) {
+    val ink = c.fg.copy(alpha = if (c.dark) .045f else .04f)
+    Canvas(modifier.clipToBounds()) {
         drawRect(Brush.verticalGradient(listOf(top, bottom)))
         val tile = 150f * density
         val stroke = Stroke(1.5f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)

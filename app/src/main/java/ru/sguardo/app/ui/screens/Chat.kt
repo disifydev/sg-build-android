@@ -171,15 +171,23 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
         if (!r.circle && !FAKE_DEVICES) {
             val why = voice.start()
             if (why != null) { repo.toast("Запись не началась: $why"); rec.value = null; return@LaunchedEffect }
-            while (rec.value === r) { r.level = voice.level(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90) }
+            var lp = false
+            while (rec.value === r) {
+                if (r.paused != lp) { lp = r.paused; if (lp) voice.pause() else voice.resume() }
+                r.level = if (r.paused) 0f else voice.level(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90)
+            }
         } else {
-            // кружок или демо: волна от записи всё равно живая
-            while (rec.value === r) { r.level = (Math.random() * Math.random() * 1.4).toFloat(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90) }
+            // кружок: пауза записи камеры; волна условная
+            var lp = false
+            while (rec.value === r) {
+                if (r.paused != lp) { lp = r.paused; runCatching { if (lp) cam.recording?.pause() else cam.recording?.resume() } }
+                r.level = if (r.paused) 0f else (Math.random() * Math.random() * 1.4).toFloat(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90)
+            }
         }
     }
     val finishRec: (RecState, Boolean) -> Unit = { r, send ->
         rec.value = null
-        val secs = (System.currentTimeMillis() - r.started) / 1000f
+        val secs = r.elapsed() / 1000f
         if (FAKE_DEVICES) {
             if (send && secs >= .7f) repo.sendFile(id, File(""), if (r.circle) "circle.mp4" else "voice.m4a", "", if (r.circle) "video" else "audio", r.circle, secs.roundToInt().coerceAtLeast(1))
             else if (send) repo.toast(if (r.circle) "Удерживайте, чтобы записать кружок" else "Удерживайте, чтобы записать голосовое")
@@ -328,7 +336,8 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
                     rec = rec, onRecDone = finishRec)
             }
         }
-        rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, FAKE_DEVICES, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null }) }
+        rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, FAKE_DEVICES, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null },
+            onCancel = { finishRec(r, false) }, onSend = { finishRec(r, true) }) }
     }
     }
 }
