@@ -55,7 +55,7 @@ val LocalChatStyle = compositionLocalOf { ChatStyle(null, null, 18.dp, 1f, true)
 /** Цветовые темы, как лента тем в Telegram: обои + цвет своих сообщений (светлая и тёмная). */
 data class ChatTheme(val key: String, val name: String, val icon: String, val wall: String, val light: Pair<Long, Long>?, val dark: Pair<Long, Long>?)
 val CHAT_THEMES = listOf(
-    ChatTheme("classic", "Классика", "book", "school", null, null),
+    ChatTheme("classic", "Классика", "edit", "school", null, null),
     ChatTheme("lilac", "Сирень", "heart", "lilac", 0xFFC2B2F7 to 0xFF1D1340, 0xFF6E58C9 to 0xFFFFFFFF),
     ChatTheme("mint", "Мята", "leaf", "mint", 0xFFAEE3CB to 0xFF0F2A20, 0xFF2F7A5E to 0xFFFFFFFF),
     ChatTheme("peach", "Персик", "sun", "peach", 0xFFF8C7AD to 0xFF3A1D10, 0xFFB8643E to 0xFFFFFFFF),
