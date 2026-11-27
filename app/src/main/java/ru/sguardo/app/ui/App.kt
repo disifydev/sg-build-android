@@ -264,6 +264,7 @@ fun MainNav(ui: UiState) {
             composable("notifs") { NotifsScreen() }
             composable("schedule") { ScheduleScreen() }
             composable("folders") { FoldersScreen() }
+            composable("chatstyle") { ru.sguardo.app.ui.screens.ChatStyleScreen() }
             composable("lists") { ListsScreen() }
             composable("staff") { StaffScreen() }
             composable("account") { AccountScreen() }

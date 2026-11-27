@@ -165,6 +165,9 @@ fun MoreScreen() {
                 Gi(t, s, leading = { Radio(theme == k) }, onClick = { repo.prefs.setTheme(k) })
             }
         }
+        Grp(Modifier.padding(top = 10.dp)) {
+            Gi("Оформление чата", "Обои: готовые или своё фото", "image", onClick = { nav.go("chatstyle") }) { Chev() }
+        }
         T("Sguardo для Android · версия ${ru.sguardo.app.BuildConfig.VERSION_NAME}", body(12f), Sg.c.faint, align = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp))
     }
 }

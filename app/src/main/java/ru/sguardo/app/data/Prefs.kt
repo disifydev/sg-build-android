@@ -23,6 +23,9 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     private val sp = context.getSharedPreferences(if (memory) "sg_demo" else "sg", Context.MODE_PRIVATE)
 
     val theme = MutableStateFlow(sp.getString("theme", "system") ?: "system")
+    /** обои чата: school, plain, mint, lilac, peach, sky, night или custom (своё фото) */
+    val chatWall = MutableStateFlow(sp.getString("chatWall", "school") ?: "school")
+    val chatWallVer = MutableStateFlow(0)
     val onboarded = MutableStateFlow(sp.getBoolean("onboarded", false))
     val namesFromBook = MutableStateFlow(sp.getBoolean("book", true))
     val notifyMessages = MutableStateFlow(sp.getBoolean("n1", true))
@@ -42,6 +45,8 @@ class Prefs(context: Context, private val memory: Boolean = false) {
         set(v) { sp.edit().putString("fcm", v).apply() }
 
     fun setTheme(v: String) { theme.value = v; sp.edit().putString("theme", v).apply() }
+    fun setChatWall(v: String) { chatWall.value = v; sp.edit().putString("chatWall", v).apply() }
+    fun bumpChatWall() { chatWallVer.value++ }
     fun setOnboarded(v: Boolean) { onboarded.value = v; sp.edit().putBoolean("onboarded", v).apply() }
     fun setNamesFromBook(v: Boolean) { namesFromBook.value = v; sp.edit().putBoolean("book", v).apply() }
     fun setNotifyMessages(v: Boolean) { notifyMessages.value = v; sp.edit().putBoolean("n1", v).apply() }
