@@ -162,18 +162,7 @@ fun MoreScreen() {
         }
         Hint("Если номер клиента записан в контактах телефона, в чатах будет имя оттуда.")
         Grp {
-            val themeName = when (theme) { "light" -> "Светлая"; "dark" -> "Тёмная"; else -> "Как в системе" }
-            Gi("Тема", icon = "moon", value = themeName, onClick = {
-                ov.openSheet {
-                    ru.sguardo.app.ui.SheetTitle("Тема")
-                    Grp(Modifier.padding(bottom = 8.dp)) {
-                        listOf("system" to "Как в системе", "light" to "Светлая", "dark" to "Тёмная").forEach { (k, t) ->
-                            Gi(t, leading = { Radio(repo.prefs.theme.collectAsState().value == k) }, onClick = { repo.prefs.setTheme(k); ov.closeSheet() })
-                        }
-                    }
-                }
-            }) { Chev() }
-            Gi("Оформление чата", icon = "image", value = if (wall == "custom") "своё фото" else null, onClick = { nav.go("chatstyle") }) { Chev() }
+            Gi("Оформление", icon = "image", value = when (theme) { "light" -> "светлая"; "dark" -> "тёмная"; else -> null }, onClick = { nav.go("appearance") }) { Chev() }
         }
         T("Sguardo для Android · версия ${ru.sguardo.app.BuildConfig.VERSION_NAME}", body(12f), Sg.c.faint, align = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp))
     }

@@ -137,8 +137,8 @@ fun sameGroup(a: Message?, b: Message?): Boolean =
     a != null && b != null && a.isOut == b.isOut && kotlin.math.abs(b.time - a.time) < 5 * 60_000 && Fmt.dayChip(a.time) == Fmt.dayChip(b.time)
 
 /** Форма пузыря: большие углы снаружи группы, маленькие внутри, у последнего — угол под хвостик. */
-fun bubbleShape(out: Boolean, top: Boolean, bottom: Boolean): RoundedCornerShape {
-    val big = 18.dp; val small = 6.dp; val tail = 4.dp
+fun bubbleShape(out: Boolean, top: Boolean, bottom: Boolean, big: androidx.compose.ui.unit.Dp = 18.dp): RoundedCornerShape {
+    val small = minOf(6.dp, big); val tail = minOf(4.dp, big)
     val sideTop = if (top) small else big
     val sideBottom = if (bottom) small else tail
     return if (out) RoundedCornerShape(big, sideTop, sideBottom, big) else RoundedCornerShape(sideTop, big, big, sideBottom)
@@ -167,9 +167,9 @@ fun Modifier.bubbleBg(bg: Color, out: Boolean, shape: RoundedCornerShape, tail: 
 @Composable
 fun BubbleBody(m: Message, c: Conversation, compact: Boolean = false, onQuote: (String) -> Unit = {}, top: Boolean = false, bottom: Boolean = false) {
     val out = m.isOut
-    val bg = if (out) Sg.c.pc else Sg.c.cHigh
-    val fg = if (out) Sg.c.onPc else Sg.c.fg
-    val shape = bubbleShape(out, top, bottom)
+    val bg = if (out) chatOut() else Sg.c.cHigh
+    val fg = if (out) chatOutFg() else Sg.c.fg
+    val shape = bubbleShape(out, top, bottom, LocalChatStyle.current.radius)
     val tail = !bottom
     val reaction = m.reactions?.firstOrNull()?.emoji
     when (m.kind) {
@@ -238,7 +238,7 @@ fun Meta(m: Message, fg: Color) {
 fun TextWithMeta(text: String, fg: Color, m: Message) {
     var tl: TextLayoutResult? = null
     Layout(content = {
-        androidx.compose.material3.Text(text, style = body(15f).copy(lineHeight = 20.4.sp), color = fg, onTextLayout = { tl = it })
+        androidx.compose.material3.Text(text, style = body(15f * LocalChatStyle.current.text).copy(lineHeight = (20.4f * LocalChatStyle.current.text).sp), color = fg, onTextLayout = { tl = it })
         Meta(m, fg)
     }) { ms, cons ->
         val tp = ms[0].measure(cons.copy(minWidth = 0))
@@ -263,7 +263,7 @@ private fun FileRow(m: Message, out: Boolean, fg: Color) {
     val ext = name.substringAfterLast('.', "").uppercase()
     val remote by produceState<String?>(Fixture.sizes[name], m.att?.url) { if (value == null && !repo.demo.value) value = remoteSize(repo, m.att)?.let { fmtSize(it) } }
     Row(Modifier.widthIn(min = 210.dp).clip(RoundedCornerShape(12.dp)).clickable { openAttachment(ctx, repo, m.att) }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).background(if (out) Sg.c.onPc else Sg.c.teal, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Ic("file", if (out) Sg.c.pc else Sg.c.onTeal) }
+        Box(Modifier.size(44.dp).background(if (out) chatOutFg() else Sg.c.teal, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Ic("file", if (out) chatOut() else Sg.c.onTeal) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.widthIn(max = 200.dp)) {
             T(name, body(14f, FontWeight.SemiBold), fg, maxLines = 1)
@@ -299,7 +299,7 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
     val seed = m.id.hashCode() % 97
     val wave = m.att?.waveform
     Row(Modifier.widthIn(min = 210.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(38.dp).clip(CircleShape).background(if (out) Sg.c.onPc else Sg.c.teal).clickable {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(if (out) chatOutFg() else Sg.c.teal).clickable {
             if (playing) { playing = false; player.value?.pause(); hub.release(m.id); return@clickable }
             hub.claim(m.id)
             val url = imageUrl(repo, m.att)
@@ -316,7 +316,7 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
                     } catch (_: Exception) { repo.toast("Не получилось включить голосовое") }
                 } else { player.value?.start(); playing = true }
             } else playing = true
-        }, contentAlignment = Alignment.Center) { Ic(if (playing) "pause" else "play", if (out) Sg.c.pc else Sg.c.onTeal, size = 16.dp) }
+        }, contentAlignment = Alignment.Center) { Ic(if (playing) "pause" else "play", if (out) chatOut() else Sg.c.onTeal, size = 16.dp) }
         Spacer(Modifier.width(10.dp))
         Row(Modifier.weight(1f).height(28.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             val n = 26

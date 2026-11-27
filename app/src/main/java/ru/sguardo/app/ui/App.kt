@@ -185,6 +185,7 @@ fun SgApp(repo: Repo, permissions: Permissions) {
                 })))
         }
         CompositionLocalProvider(LocalRepo provides repo, LocalUi provides ui, LocalOv provides ov, LocalPerms provides permissions) {
+          CompositionLocalProvider(ru.sguardo.app.ui.screens.LocalChatStyle provides ru.sguardo.app.ui.screens.rememberChatStyle()) {
             Box(Modifier.fillMaxSize().background(Sg.c.surface)) {
                 androidx.compose.runtime.key(demo) { when {
                     splash || phase == Phase.Launching -> SplashScreen()
@@ -195,6 +196,7 @@ fun SgApp(repo: Repo, permissions: Permissions) {
                 OverlayHost(ov)
                 ToastHost(repo)
             }
+          }
         }
     }
 }
@@ -265,6 +267,7 @@ fun MainNav(ui: UiState) {
             composable("schedule") { ScheduleScreen() }
             composable("folders") { FoldersScreen() }
             composable("chatstyle") { ru.sguardo.app.ui.screens.ChatStyleScreen() }
+            composable("appearance") { ru.sguardo.app.ui.screens.AppearanceScreen() }
             composable("lists") { ListsScreen() }
             composable("staff") { StaffScreen() }
             composable("account") { AccountScreen() }

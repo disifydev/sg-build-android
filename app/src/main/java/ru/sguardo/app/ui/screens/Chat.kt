@@ -365,7 +365,8 @@ fun CBar(kind: String, title: String, text: String, onClose: () -> Unit) {
 private fun MsgRow(m: Message, prev: Message?, next: Message?, conv: Conversation, sel: Set<String>?, hidden: Boolean, fresh: Boolean, onTap: () -> Unit, onLong: () -> Unit, onReply: () -> Unit,
                    onBackDrag: (Float) -> Unit, onBackEnd: () -> Unit, onQuote: (String) -> Unit, onBounds: (Float) -> Unit) {
     // новое сообщение «прилетает» снизу, как в Telegram (своё — от поля ввода справа, входящее — слева)
-    val enter = remember { Animatable(if (fresh && Arrived.claim(m)) 0f else 1f) }
+    val anim = LocalChatStyle.current.anim
+    val enter = remember { Animatable(if (anim && fresh && Arrived.claim(m)) 0f else 1f) }
     LaunchedEffect(Unit) { if (enter.value < 1f) enter.animateTo(1f, spring(dampingRatio = .72f, stiffness = 420f)) }
     val x = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -532,7 +533,7 @@ fun askDeleteMsgs(ov: Overlays, repo: Repo, convId: String, ids: List<String>, m
     val own = msgs.filter { it.id in ids }.all { it.isOut }
     ov.confirm(DialogSpec(if (ids.size > 1) "Удалить ${ids.size} ${Fmt.plural(ids.size, "сообщение", "сообщения", "сообщений")}?" else "Удалить сообщение?",
         "Сообщение пропадёт из этого чата.", check = if (own) "Удалить и у собеседника" else null,
-        buttons = listOf(DialogBtn("Удалить", danger = true) { both -> after(); Dust.run(ids) { repo.deleteMessages(convId, ids, both) } })))
+        buttons = listOf(DialogBtn("Удалить", danger = true) { both -> after(); if (repo.prefs.animations.value) Dust.run(ids) { repo.deleteMessages(convId, ids, both) } else repo.deleteMessages(convId, ids, both) })))
 }
 
 fun openForward(ov: Overlays, repo: Repo, fromConv: String, ids: List<String>, after: () -> Unit) {

@@ -26,6 +26,10 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     /** обои чата: school, plain, mint, lilac, peach, sky, night или custom (своё фото) */
     val chatWall = MutableStateFlow(sp.getString("chatWall", "school") ?: "school")
     val chatWallVer = MutableStateFlow(0)
+    val chatTheme = MutableStateFlow(sp.getString("chatTheme", "classic") ?: "classic")
+    val bubbleRadius = MutableStateFlow(sp.getInt("bubbleRadius", 18))
+    val textScale = MutableStateFlow(sp.getFloat("textScale", 1f))
+    val animations = MutableStateFlow(sp.getBoolean("animations", true))
     val onboarded = MutableStateFlow(sp.getBoolean("onboarded", false))
     val namesFromBook = MutableStateFlow(sp.getBoolean("book", true))
     val notifyMessages = MutableStateFlow(sp.getBoolean("n1", true))
@@ -47,6 +51,10 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     fun setTheme(v: String) { theme.value = v; sp.edit().putString("theme", v).apply() }
     fun setChatWall(v: String) { chatWall.value = v; sp.edit().putString("chatWall", v).apply() }
     fun bumpChatWall() { chatWallVer.value++ }
+    fun setChatTheme(v: String) { chatTheme.value = v; sp.edit().putString("chatTheme", v).apply() }
+    fun setBubbleRadius(v: Int) { bubbleRadius.value = v; sp.edit().putInt("bubbleRadius", v).apply() }
+    fun setTextScale(v: Float) { textScale.value = v; sp.edit().putFloat("textScale", v).apply() }
+    fun setAnimations(v: Boolean) { animations.value = v; sp.edit().putBoolean("animations", v).apply() }
     fun setOnboarded(v: Boolean) { onboarded.value = v; sp.edit().putBoolean("onboarded", v).apply() }
     fun setNamesFromBook(v: Boolean) { namesFromBook.value = v; sp.edit().putBoolean("book", v).apply() }
     fun setNotifyMessages(v: Boolean) { notifyMessages.value = v; sp.edit().putBoolean("n1", v).apply() }

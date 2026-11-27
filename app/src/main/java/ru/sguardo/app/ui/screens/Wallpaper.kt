@@ -170,7 +170,7 @@ fun ChatStyleScreen() {
     val repo = LocalRepo.current; val nav = LocalNav.current; val perms = LocalPerms.current; val ctx = LocalContext.current
     val cur by repo.prefs.chatWall.collectAsState()
     Column(Modifier.fillMaxSize().background(Sg.c.surface)) {
-        SubTopBar("Оформление чата", { nav.back() })
+        SubTopBar("Обои для чатов", { nav.back() })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             Box(Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(24.dp))) {
                 ChatWallpaper(Modifier.fillMaxSize())
@@ -220,10 +220,10 @@ fun ChatStyleScreen() {
 
 @Composable
 private fun SampleBubble(text: String, out: Boolean) {
-    val shape = bubbleShape(out, top = false, bottom = false)
+    val shape = bubbleShape(out, top = false, bottom = false, big = LocalChatStyle.current.radius)
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalArrangement = if (out) Arrangement.End else Arrangement.Start) {
-        Box(Modifier.widthIn(max = 240.dp).bubbleBg(if (out) Sg.c.pc else Sg.c.cHigh, out, shape, true).clip(shape).padding(horizontal = 12.dp, vertical = 8.dp)) {
-            T(text, body(14.5f), if (out) Sg.c.onPc else Sg.c.fg)
+        Box(Modifier.widthIn(max = 240.dp).bubbleBg(if (out) chatOut() else Sg.c.cHigh, out, shape, true).clip(shape).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            T(text, body(14.5f * LocalChatStyle.current.text), if (out) chatOutFg() else Sg.c.fg)
         }
     }
 }
