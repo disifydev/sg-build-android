@@ -192,6 +192,8 @@ data class User(
     val role: String = "owner",
     val locale: String? = null,
     val tz: String? = null,
+    /** модули кабинета от админа (как на сайте): schedule — репетиторские функции, partners — «Партнёры» */
+    val features: ModuleFlags? = null,
 ) {
     val isOwner get() = role == "owner"
 }

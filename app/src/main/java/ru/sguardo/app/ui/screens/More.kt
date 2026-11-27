@@ -142,7 +142,7 @@ fun MoreScreen() {
         Grp {
             Gi("Расписание", icon = "cal", value = if (today > 0) "сегодня $today" else null, onClick = { nav.go("schedule") }) { Chev() }
             Gi(if (tutor) "Папки и классы" else "Папки", icon = "sliders", value = if (tutor) "${st.folders.size} · $kl" else "${st.folders.size}", onClick = { nav.go("folders") }) { Chev() }
-            if (mods?.partners == true) Gi("Партнёры", icon = "users", onClick = { nav.go("partners") }) { Chev() }
+            if (mods?.partners == true || user?.features?.partners == true) Gi("Партнёры", icon = "users", onClick = { nav.go("partners") }) { Chev() }
             val s = acc?.sessions ?: 1
             Gi("Вход и устройства", icon = "shield", value = "$s", onClick = { nav.go("security") }) { Chev() }
         }
@@ -166,9 +166,9 @@ fun MoreScreen() {
         }
         Hint("Если номер клиента записан в контактах телефона, в чатах будет имя оттуда.")
         Grp {
-            val byAdmin = mods?.education == true
-            Gi("Функции для репетиторов", if (byAdmin) "Включены для вашего кабинета" else null, icon = "book",
-                onClick = { if (!byAdmin) repo.prefs.setTutor(!tutor) }) { SgSwitch(tutor) { if (!byAdmin) repo.prefs.setTutor(it) } }
+            val byAdmin = mods?.education == true || mods?.schedule == true || user?.features?.schedule == true
+            Gi("Функции для репетиторов", if (byAdmin && tutorPref == null) "Включены для вашего кабинета" else null, icon = "book",
+                onClick = { repo.prefs.setTutor(!tutor) }) { SgSwitch(tutor) { repo.prefs.setTutor(it) } }
         }
         Hint("Классы, группы и предметы: фильтр «Все классы», класс в карточке ученика. Расписание доступно всем.")
         Grp {

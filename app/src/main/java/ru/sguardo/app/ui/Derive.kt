@@ -60,8 +60,10 @@ fun tutorOn(): Boolean {
     val mods by r.modules.collectAsState()
     val pref by r.prefs.tutor.collectAsState()
     val st by r.state.collectAsState()
-    if (mods?.education == true) return true
+    val me by r.user.collectAsState()
+    // явный выбор в приложении главнее; иначе включено, если админ дал модуль (на сайте это «Расписание», позже «Обучение»)
     pref?.let { return it }
+    if (mods?.education == true || mods?.schedule == true || me?.features?.schedule == true) return true
     return st.contacts.any { c -> c.tags.orEmpty().any { it.startsWith(CLASS_P) || it.startsWith(GROUP_P) } } || r.prefs.extraClasses.value.isNotEmpty()
 }
 
