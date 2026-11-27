@@ -167,7 +167,8 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     LaunchedEffect(rec.value) {
         val r = rec.value ?: return@LaunchedEffect
         if (!r.circle && !repo.demo.value) {
-            if (!voice.start()) { repo.toast("Микрофон занят или недоступен"); rec.value = null; return@LaunchedEffect }
+            val why = voice.start()
+            if (why != null) { repo.toast("Запись не началась: $why"); rec.value = null; return@LaunchedEffect }
             while (rec.value === r) { r.level = voice.level(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90) }
         } else {
             // кружок или демо: волна от записи всё равно живая
@@ -185,7 +186,11 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
             cam.recording?.stop() ?: run { cam.onDone = null }
             cam.torch(false)
         } else {
-            if (send && secs >= .7f) voice.stop()?.let { f -> repo.sendFile(id, f, "Голосовое.m4a", "audio/mp4", "audio", false, secs.roundToInt()) }
+            if (send && secs >= .7f) {
+                val f = voice.stop()
+                if (f != null) repo.sendFile(id, f, "Голосовое.m4a", "audio/mp4", "audio", false, secs.roundToInt())
+                else repo.toast("Голосовое не отправлено: ${voice.error ?: "запись не сохранилась"}")
+            }
             else { voice.cancel(); if (send) repo.toast("Удерживайте, чтобы записать голосовое") }
         }
     }
@@ -318,7 +323,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
                     rec = rec, onRecDone = finishRec)
             }
         }
-        rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, repo.demo.value) }
+        rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, repo.demo.value, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null }) }
     }
     }
 }

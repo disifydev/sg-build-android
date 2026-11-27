@@ -144,7 +144,8 @@ fun MoreScreen() {
                 if (on && !notifOk) perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); if (ok) repo.registerPushIfPossible(); repo.toast(if (ok) "Уведомления включены" else "Доступ не выдан") }
                 else { repo.prefs.setNotifyMessages(on); if (on) repo.registerPushIfPossible() else repo.unregisterPush() }
             }
-            Gi("Новые сообщения", if (!notifOk && !repo.demo.value) "Выключены в настройках телефона" else "Имя клиента и текст сообщения", "chat", onClick = { toggle1(!(n1 && notifOk)) }) { SgSwitch(n1 && (notifOk || repo.demo.value), toggle1) }
+            val ps by repo.pushStatus.collectAsState()
+            Gi("Новые сообщения", if (!notifOk && !repo.demo.value) "Выключены в настройках телефона" else if (!repo.demo.value && ps.startsWith("Недоступны")) "Уведомления $ps".replaceFirst("Уведомления Недоступны", "Уведомления недоступны") else "Имя клиента и текст сообщения", "chat", onClick = { toggle1(!(n1 && notifOk)) }) { SgSwitch(n1 && (notifOk || repo.demo.value), toggle1) }
             Gi("Напоминания", "Об оплатах и занятиях", "bell", onClick = { repo.prefs.setNotifyReminders(!n2) }) { SgSwitch(n2) { repo.prefs.setNotifyReminders(it) } }
         }
         Sect("Телефонная книга")

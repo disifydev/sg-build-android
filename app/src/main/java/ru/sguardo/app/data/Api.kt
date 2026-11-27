@@ -58,16 +58,21 @@ class PersistentCookieJar(context: Context) : CookieJar {
 
     @Synchronized
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        val ed = prefs.edit()
-        for (c in cookies) {
-            val key = c.domain + "|" + c.name
-            if (c.expiresAt < System.currentTimeMillis() || c.value.isEmpty()) {
-                cache.remove(key); ed.remove(key)
-            } else {
-                cache[key] = c; ed.putString(key, c.toString())
+        try {
+            val ed = prefs.edit()
+            for (c in cookies) {
+                val key = c.domain + "|" + c.name
+                if (c.expiresAt < System.currentTimeMillis() || c.value.isEmpty()) {
+                    cache.remove(key); ed.remove(key)
+                } else {
+                    cache[key] = c; ed.putString(key, c.toString())
+                }
             }
+            ed.apply()
+        } catch (_: Throwable) {
+            // хранилище ключей недоступно (эмуляторы): держим сессию в памяти
+            for (c in cookies) if (c.value.isNotEmpty()) cache[c.domain + "|" + c.name] = c
         }
-        ed.apply()
     }
 
     @Synchronized

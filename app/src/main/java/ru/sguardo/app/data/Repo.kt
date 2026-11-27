@@ -123,6 +123,7 @@ class Repo private constructor(private val ctx: Context) {
             try {
                 user.value = api.get<MeResponse>("/api/auth/me/").user
                 phase.value = Phase.Ready
+                registerPushIfPossible()
                 reload(force = true)
                 startLive()
                 launch { loadAccount() }
@@ -132,7 +133,7 @@ class Repo private constructor(private val ctx: Context) {
                 if (e.status == 401) phase.value = Phase.Login else { phase.value = Phase.Ready; load.value = Load.Error; loadError.value = e.message }
             } catch (e: Exception) {
                 // нет сети: кука есть — пускаем в кабинет, данные подтянем позже
-                phase.value = Phase.Ready; load.value = Load.Error; loadError.value = friendly(e); startLive()
+                phase.value = Phase.Ready; load.value = Load.Error; loadError.value = friendly(e); startLive(); registerPushIfPossible()
             }
         }
     }
@@ -678,17 +679,47 @@ class Repo private constructor(private val ctx: Context) {
     }
 
     // ---------- push ----------
+    /** Состояние push для экрана «Ещё»: «Подключены» или «Недоступны: причина». */
+    val pushStatus = MutableStateFlow("Ещё не проверялось")
+    private var pushToastShown = false
+
+    private fun pushFail(reason: String) {
+        android.util.Log.w("SGPUSH", reason)
+        pushStatus.value = "Недоступны: $reason"
+        if (phase.value == Phase.Ready && !pushToastShown) { pushToastShown = true; toast("Уведомления недоступны: $reason") }
+    }
+
+    /**
+     * Получить токен FCM и зарегистрировать устройство на сервере (POST /api/push/device).
+     * Зовётся при каждом запуске, после входа и при возвращении в приложение. Токен получаем и до входа: после входа он уйдёт сразу.
+     * На Android 8–12 разрешение на уведомления не нужно (POST_NOTIFICATIONS спрашивается только с Android 13).
+     */
     fun registerPushIfPossible() {
-        if (demo.value || phase.value != Phase.Ready || !prefs.notifyMessages.value) return
+        if (demo.value) return
+        if (!prefs.notifyMessages.value) { pushStatus.value = "Выключены в приложении"; return }
         try {
-            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { t -> if (t != null) registerToken(t) }
-        } catch (_: Throwable) { /* Firebase не настроен (сборка без google-services.json) */ }
+            if (com.google.firebase.FirebaseApp.getApps(ctx).isEmpty()) { pushFail("Firebase не настроен в этой сборке"); return }
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { t ->
+                val tok = t.result
+                if (t.isSuccessful && !tok.isNullOrBlank()) {
+                    android.util.Log.i("SGPUSH", "token ok, длина ${tok.length}")
+                    registerToken(tok)
+                } else pushFail(t.exception?.message?.take(120) ?: "токен не получен: нет сервисов Google Play или нет сети")
+            }
+        } catch (e: Throwable) { pushFail(e.message?.take(120) ?: e.javaClass.simpleName) }
     }
 
     fun registerToken(token: String) {
-        if (demo.value || !api.cookies.hasSession()) return
+        if (demo.value) return
         prefs.fcmToken = token
-        scope.launch { runCatching { api.call("POST", "/api/push/device/", obj("platform" to "android", "token" to token)) } }
+        if (!api.cookies.hasSession()) { pushStatus.value = "Токен получен, ждём вход"; return }
+        scope.launch {
+            try {
+                api.call("POST", "/api/push/device/", obj("platform" to "android", "token" to token))
+                android.util.Log.i("SGPUSH", "устройство зарегистрировано на сервере")
+                pushStatus.value = "Подключены"
+            } catch (e: Exception) { pushFail("сервер не принял устройство: ${friendly(e)}") }
+        }
     }
 
     fun unregisterPush() {

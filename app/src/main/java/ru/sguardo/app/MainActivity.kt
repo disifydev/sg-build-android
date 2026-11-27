@@ -41,9 +41,10 @@ class MainActivity : ComponentActivity(), Permissions {
             .components { add(coil.decode.VideoFrameDecoder.Factory()) }.build())
         repo.watchNetwork()
         if (repo.phase.value == Phase.Launching) repo.bootstrap()
+        repo.registerPushIfPossible()
         handle(intent)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) { if (repo.phase.value == Phase.Ready && !repo.demo.value) { repo.startLive(); repo.scope.launch { repo.reload() } } }
+            override fun onStart(owner: LifecycleOwner) { if (repo.phase.value == Phase.Ready && !repo.demo.value) { repo.startLive(); repo.scope.launch { repo.reload() }; repo.registerPushIfPossible() } }
             override fun onStop(owner: LifecycleOwner) { repo.stopLive() }
         })
         setContent { SgApp(repo, this) }

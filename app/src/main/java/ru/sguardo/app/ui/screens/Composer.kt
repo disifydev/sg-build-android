@@ -1,6 +1,7 @@
 package ru.sguardo.app.ui.screens
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.os.Build
 import androidx.camera.core.CameraSelector
@@ -104,19 +105,38 @@ import kotlin.math.roundToInt
 class VoiceRecorder(private val ctx: Context) {
     private var rec: MediaRecorder? = null
     var file: File? = null; private set
-    fun start(): Boolean = try {
+    /** Причина, по которой запись не пошла или не сохранилась (показываем в тосте). */
+    var error: String? = null; private set
+
+    /** null — запись пошла, иначе точная причина. */
+    fun start(): String? {
+        error = null
+        if (!ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)) return "на устройстве нет микрофона"
+        if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return "нет доступа к микрофону: разрешите его в настройках телефона"
+        var r: MediaRecorder? = null
+        return try {
         val f = File(ctx.cacheDir, "voice-${System.currentTimeMillis()}.m4a")
-        val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(ctx) else @Suppress("DEPRECATION") MediaRecorder()
+        r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(ctx) else @Suppress("DEPRECATION") MediaRecorder()
         r.setAudioSource(MediaRecorder.AudioSource.MIC)
         r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
         r.setAudioEncodingBitRate(64_000); r.setAudioSamplingRate(44_100)
         r.setOutputFile(f.absolutePath)
         r.prepare(); r.start()
-        rec = r; file = f; true
-    } catch (_: Exception) { rec = null; false }
+        rec = r; file = f
+        android.util.Log.i("SGVOICE", "запись пошла")
+        null
+        } catch (e: java.io.IOException) {
+            runCatching { r?.release() }; rec = null; "не удалось подготовить запись: ${e.message ?: "ошибка ввода-вывода"}"
+        } catch (e: Exception) {
+            runCatching { r?.release() }; rec = null; "микрофон занят или не отвечает: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
     fun level(): Float = try { (rec?.maxAmplitude ?: 0) / 32767f } catch (_: Exception) { 0f }
-    fun stop(): File? = try { rec?.stop(); rec?.release(); rec = null; file } catch (_: Exception) { rec?.release(); rec = null; null }
+    fun stop(): File? = try {
+        rec?.stop(); rec?.release(); rec = null
+        file?.takeIf { it.length() > 0 } ?: run { error = "запись получилась пустой"; null }
+    } catch (e: Exception) { runCatching { rec?.release() }; rec = null; error = "запись не сохранилась (${e.message ?: "слишком короткая"})"; null }
     fun cancel() { stop(); file?.delete(); file = null }
 }
 
@@ -140,10 +160,12 @@ class CircleCam {
     var camera: androidx.camera.core.Camera? = null
     var file: File? = null
     var onDone: ((File?) -> Unit)? = null
+    var both = true
     fun torch(on: Boolean) { try { camera?.cameraControl?.enableTorch(on) } catch (_: Exception) {} }
 }
 
 const val TEMPLATE_KEY = "tpl"
+fun hasAnyCamera(ctx: Context) = ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
 
 /** Поле ввода чата (Android): скрепка, текст, шаблоны, «позже»; справа — отправка или микрофон/кружок. */
 @Composable
@@ -161,6 +183,7 @@ fun Composer(
 ) {
     val repo = LocalRepo.current
     val perms = LocalPerms.current
+    val ctxC = LocalContext.current
     var circleMode by remember { mutableStateOf(false) }
     val has = text.value.isNotBlank()
     val density = LocalDensity.current
@@ -221,6 +244,7 @@ fun Composer(
                                 } else repo.toast(if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
                                 return@awaitEachGesture
                             }
+                            if (circleMode && !repo.demo.value && !hasAnyCamera(ctxC)) { repo.toast("На этом устройстве нет камеры, кружок записать нельзя. Голосовое доступно: нажмите на кнопку ещё раз"); return@awaitEachGesture }
                             val r = RecState(circleMode, System.currentTimeMillis())
                             var ok = true
                             if (!repo.demo.value) {
@@ -327,7 +351,7 @@ private fun BigMic(r: RecState, modifier: Modifier, onSend: () -> Unit) {
 /** Запись кружка: круглое превью камеры, кольцо прогресса до 60 с, вспышка и смена камеры. */
 @OptIn(androidx.camera.video.ExperimentalPersistentRecording::class)
 @Composable
-fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
+fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val t0 = r.started
@@ -337,7 +361,7 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = .7f, stiffness = 300f)) }
     val flip = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val vc = remember { VideoCapture.withOutput(Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.SD)).build()) }
+    val vc = remember { VideoCapture.withOutput(Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.SD, androidx.camera.video.FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build()) }
     if (!demo) DisposableEffect(r.back) {
         val future = ProcessCameraProvider.getInstance(ctx)
         future.addListener({
@@ -345,7 +369,13 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
                 val provider = future.get()
                 val preview = androidx.camera.core.Preview.Builder().build().also { p -> cam.preview?.let { pv -> p.setSurfaceProvider(pv.surfaceProvider) } }
                 provider.unbindAll()
-                // та же VideoCapture и «постоянная» запись: смена камеры не прерывает кружок
+                val hasFront = try { provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) } catch (_: Exception) { false }
+                val hasBack = try { provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) } catch (_: Exception) { false }
+                cam.both = hasFront && hasBack
+                if (!hasFront && !hasBack) { onFail("На устройстве не нашлась камера (в эмуляторе камеру нужно включить в настройках)"); return@addListener }
+                // нужной камеры нет — берём ту, что есть
+                val useBack = if (r.back) hasBack else !hasFront
+                if (useBack != r.back) { r.back = useBack; repoToast(ctx, if (useBack) "Фронтальной камеры нет, снимаем основной" else "Основной камеры нет, снимаем фронтальной"); return@addListener }
                 cam.camera = provider.bindToLifecycle(owner, if (r.back) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA, preview, vc)
                 cam.capture = vc
                 if (cam.recording == null) {
@@ -353,10 +383,15 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
                     var pending = vc.output.prepareRecording(ctx, FileOutputOptions.Builder(f).build())
                     if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) pending = pending.withAudioEnabled()
                     pending = pending.asPersistentRecording()
-                    cam.recording = pending.start(ContextCompat.getMainExecutor(ctx)) { e -> if (e is VideoRecordEvent.Finalize) cam.onDone?.invoke(if (e.hasError()) null else f) }
+                    cam.recording = pending.start(ContextCompat.getMainExecutor(ctx)) { e ->
+                        if (e is VideoRecordEvent.Finalize) {
+                            if (e.hasError()) repoToast(ctx, "Запись кружка не получилась (код ${e.error}${e.cause?.message?.let { ": $it" } ?: ""})")
+                            cam.onDone?.invoke(if (e.hasError()) null else f)
+                        }
+                    }
                 }
                 if (r.flash) cam.torch(true)
-            } catch (e: Exception) { ru.sguardo.app.data.Repo.get(ctx).toast("Камера не запустилась: ${e.message ?: "занята другим приложением"}") }
+            } catch (e: Exception) { onFail("Камера не запустилась: ${e.message ?: "занята другим приложением"}") }
         }, ContextCompat.getMainExecutor(ctx))
         onDispose { }
     }
@@ -387,6 +422,7 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
             Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
                 CamBtn("bolt", r.flash) { r.flash = !r.flash; cam.torch(r.flash) }
                 CamBtn("flip", false) {
+                    if (!cam.both) { repoToast(ctx, "Вторая камера не найдена"); return@CamBtn }
                     scope.launch { flip.animateTo(1f, tween(170)); r.back = !r.back; flip.animateTo(0f, tween(260)) }
                 }
             }
@@ -403,3 +439,5 @@ private fun CamBtn(icon: String, on: Boolean, onClick: () -> Unit) {
         Ic(icon, if (on) Color(0xFF111111) else Color.White)
     }
 }
+
+private fun repoToast(ctx: Context, text: String) = ru.sguardo.app.data.Repo.get(ctx).toast(text)
