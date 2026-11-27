@@ -172,8 +172,9 @@ private fun PayRow(d: Deal, just: Boolean, onPaid: () -> Unit) {
             Box(Modifier.size(38.dp).clip(CircleShape).border(1.dp, Sg.c.outline, CircleShape).clickable {
                 onPaid()
                 val prev = d.status
-                repo.act(obj("type" to "updateDeal", "id" to d.id, "status" to "paid"), "${repo.nameOf(c)}: ${Fmt.rub(d.amount)} оплачено",
-                    undo = { repo.act(obj("type" to "updateDeal", "id" to d.id, "status" to prev)) })
+                repo.act(obj("type" to "pay", "contactId" to d.contactId, "productId" to (d.productId ?: kotlinx.serialization.json.JsonNull), "amount" to d.amount.coerceAtLeast(1), "dealId" to d.id),
+                    "${repo.nameOf(c)}: ${Fmt.rub(d.amount)} оплачено",
+                    undo = { repo.act(obj("type" to "updateDeal", "id" to d.id, "status" to prev, "dueAt" to d.dueAt)) })
             }, contentAlignment = Alignment.Center) { Ic("check", Sg.c.fg, size = 16.dp) }
         } else if (just) {
             Spacer(Modifier.width(12.dp))
@@ -186,16 +187,18 @@ private fun PayRow(d: Deal, just: Boolean, onPaid: () -> Unit) {
 
 /** Новая оплата: клиент, товар, статус «Оплачено» или «Обещал оплатить». */
 @Composable
-fun ColumnScope.PaySheet(contactId: String?, status: String) {
+fun ColumnScope.PaySheet(contactId: String?, status: String, title: String = "Новая оплата", lockClient: Boolean = false) {
     val repo = LocalRepo.current; val ov = LocalOv.current
     val st by repo.state.collectAsState()
     var picked by remember { mutableStateOf(contactId) }
     var q by remember { mutableStateOf(contactId?.let { repo.nameOf(repo.contact(it)) } ?: "") }
     var prod by remember { mutableStateOf<String?>(null) }
     var stt by remember { mutableStateOf(if (status == "promised") "prom" else "paid") }
-    SheetTitle("Новая оплата")
+    SheetTitle(title)
     Lbl("Клиент")
-    SField(q, { q = it; picked = null }, "Имя клиента", "user", bg = Sg.c.cHigh)
+    if (lockClient && picked != null) Row(Modifier.fillMaxWidth().height(48.dp).background(Sg.c.cHigh, RoundedCornerShape(24.dp)).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(q, 28.dp, ring = Sg.c.cHigh); Spacer(Modifier.width(10.dp)); T(q, body(15f))
+    } else SField(q, { q = it; picked = null }, "Имя клиента", "user", bg = Sg.c.cHigh)
     if (picked == null && q.isNotBlank()) {
         val found = st.contacts.filter { repo.nameOf(it).contains(q.trim(), ignoreCase = true) }.take(4)
         Column(Modifier.padding(top = 4.dp)) {
@@ -211,18 +214,24 @@ fun ColumnScope.PaySheet(contactId: String?, status: String) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         st.products.forEach { p -> ProdRow(p.name, Fmt.rub(p.price), prod == p.id) { prod = p.id } }
     }
+    // товаров в кабинете нет или нужна другая сумма — вводим вручную
+    var custom by remember { mutableStateOf("") }
+    Lbl(if (st.products.isEmpty()) "Сумма" else "Или другая сумма")
+    SField(custom, { custom = it.filter { ch -> ch.isDigit() }.take(9); if (custom.isNotEmpty()) prod = null }, "Например, 2500", "card", keyboard = androidx.compose.ui.text.input.KeyboardType.Number)
     Lbl("Статус")
     Seg(listOf(Triple("paid", "Оплачено", 0), Triple("prom", "Обещал оплатить", 0)), stt, { stt = it }, hpad = 0.dp)
     VGap(18.dp)
     val p = st.products.firstOrNull { it.id == prod }
-    Btn("Добавить" + (p?.let { " · " + Fmt.rub(it.price) } ?: ""), icon = "check", wide = true) {
+    val sum = p?.price ?: custom.toLongOrNull() ?: 0L
+    Btn("Добавить" + (if (sum > 0) " · " + Fmt.rub(sum) else ""), icon = "check", wide = true) {
         val cid = picked ?: st.contacts.firstOrNull { repo.nameOf(it).equals(q.trim(), true) }?.id
         if (cid == null) { repo.toast("Укажите клиента"); return@Btn }
-        if (p == null) { repo.toast("Выберите товар или услугу"); return@Btn }
+        if (sum <= 0) { repo.toast("Выберите товар или введите сумму"); return@Btn }
         ov.closeSheet()
         val name = repo.nameOf(repo.contact(cid))
-        if (stt == "paid") repo.act(obj("type" to "pay", "contactId" to cid, "productId" to p.id, "amount" to p.price), "$name: ${Fmt.rub(p.price)}, оплачено")
-        else repo.act(obj("type" to "promise", "contactId" to cid, "productId" to p.id, "amount" to p.price,
-            "remindAt" to Clock.isoLocal(Clock.at(Clock.today().plusDays(7), 10, 0))), "$name: ${Fmt.rub(p.price)}, обещал оплатить")
+        val pid: Any = p?.id ?: kotlinx.serialization.json.JsonNull
+        if (stt == "paid") repo.act(obj("type" to "pay", "contactId" to cid, "productId" to pid, "amount" to sum), "$name: ${Fmt.rub(sum)}, оплачено")
+        else repo.act(obj("type" to "promise", "contactId" to cid, "productId" to pid, "amount" to sum,
+            "remindAt" to Clock.isoLocal(Clock.at(Clock.today().plusDays(7), 10, 0))), "$name: ${Fmt.rub(sum)}, обещал оплатить")
     }
 }

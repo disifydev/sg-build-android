@@ -153,7 +153,11 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     val widthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
 
     LaunchedEffect(id) { repo.markRead(id); repo.loadHistory(id); repo.loadScheduled(id) }
-    LaunchedEffect(msgs.size) { if (msgs.isNotEmpty()) list.animateScrollToItem(0); repo.markRead(id) }
+    var firstScroll by remember(id) { mutableStateOf(true) }
+    LaunchedEffect(msgs.size) {
+        if (msgs.isNotEmpty()) { if (firstScroll) list.scrollToItem(0) else if (list.firstVisibleItemIndex < 3) list.animateScrollToItem(0) }
+        firstScroll = false; repo.markRead(id)
+    }
     // старые сообщения при прокрутке вверх
     LaunchedEffect(list.firstVisibleItemIndex, msgs.size) {
         val lastVisible = list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -164,7 +168,10 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
         val r = rec.value ?: return@LaunchedEffect
         if (!r.circle && !repo.demo.value) {
             if (!voice.start()) { repo.toast("Микрофон занят или недоступен"); rec.value = null; return@LaunchedEffect }
-            while (rec.value === r) { r.level = voice.level(); kotlinx.coroutines.delay(90) }
+            while (rec.value === r) { r.level = voice.level(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90) }
+        } else {
+            // кружок или демо: волна от записи всё равно живая
+            while (rec.value === r) { r.level = (Math.random() * Math.random() * 1.4).toFloat(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90) }
         }
     }
     val finishRec: (RecState, Boolean) -> Unit = { r, send ->
@@ -174,11 +181,11 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
             if (send && secs >= .7f) repo.sendFile(id, File(""), if (r.circle) "circle.mp4" else "voice.m4a", "", if (r.circle) "video" else "audio", r.circle, secs.roundToInt().coerceAtLeast(1))
             else if (send) repo.toast(if (r.circle) "Удерживайте, чтобы записать кружок" else "Удерживайте, чтобы записать голосовое")
         } else if (r.circle) {
-            cam.onDone = { f -> if (send && f != null && secs >= .7f) repo.sendFile(id, f, f.name, "video/mp4", "video", true, secs.roundToInt()) else f?.delete(); cam.recording = null; cam.onDone = null }
+            cam.onDone = { f -> if (send && f != null && secs >= .7f) repo.sendFile(id, f, "Кружок.mp4", "video/mp4", "video", true, secs.roundToInt()) else f?.delete(); cam.recording = null; cam.onDone = null }
             cam.recording?.stop() ?: run { cam.onDone = null }
             cam.torch(false)
         } else {
-            if (send && secs >= .7f) voice.stop()?.let { f -> repo.sendFile(id, f, f.name, "audio/mp4", "audio", false, secs.roundToInt()) }
+            if (send && secs >= .7f) voice.stop()?.let { f -> repo.sendFile(id, f, "Голосовое.m4a", "audio/mp4", "audio", false, secs.roundToInt()) }
             else { voice.cancel(); if (send) repo.toast("Удерживайте, чтобы записать голосовое") }
         }
     }
@@ -207,6 +214,8 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     }
     if (sel != null) BackHandler { sel = null }
 
+    val hub = remember(id) { PlayerHub() }
+    androidx.compose.runtime.CompositionLocalProvider(LocalPlayer provides hub) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .25f * k))) {
         Column(Modifier.fillMaxSize().graphicsLayer { translationX = k * 22 * density.density; scaleX = 1 - .1f * k; scaleY = 1 - .1f * k }
             .clip(RoundedCornerShape((k * 30).dp)).background(Sg.c.surface).imePadding()) {
@@ -310,6 +319,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
             }
         }
         rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, repo.demo.value) }
+    }
     }
 }
 
@@ -561,7 +571,7 @@ fun openAttach(ov: Overlays, repo: Repo, perms: ru.sguardo.app.ui.Permissions, c
             Column(Modifier.clip(RoundedCornerShape(18.dp)), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 (0 until 2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     (0 until 3).forEach { col -> val i = row * 3 + col
-                        Box(Modifier.weight(1f).aspectRatio(1f).background(GAL[i]).clickable { ov.closeSheet(); repo.sendFile(convId, File(""), "demo:$i", "", "image") })
+                        Box(Modifier.weight(1f).aspectRatio(1f).background(GAL[i]).clickable { ov.closeSheet(); openPhotoPreview(ov, repo, convId, null, "demo:$i") })
                     }
                 } }
             }
@@ -570,17 +580,27 @@ fun openAttach(ov: Overlays, repo: Repo, perms: ru.sguardo.app.ui.Permissions, c
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Tile("image", "Галерея", modifier = Modifier.weight(1f)) {
                 ov.closeSheet()
-                if (repo.demo.value) repo.sendFile(convId, File(""), "demo:0", "", "image")
-                else perms.pickImage { uri -> uri?.let { u -> copyToCache(ctx, u)?.let { (f, name, mime) -> repo.sendFile(convId, f, name, mime, if (mime.startsWith("video")) "video" else "image") } } }
+                if (repo.demo.value) openPhotoPreview(ov, repo, convId, null, "demo:0")
+                else perms.pickImage { uri ->
+                    if (uri == null) return@pickImage
+                    val got = copyToCache(ctx, uri)
+                    if (got == null) { repo.toast("Не получилось прочитать файл"); return@pickImage }
+                    val (f, name, mime) = got
+                    if (mime.startsWith("video")) repo.sendFile(convId, f, name, mime, "video") else openPhotoPreview(ov, repo, convId, Triple(f, name, mime), null)
+                }
             }
             Tile("file", "Файл", modifier = Modifier.weight(1f)) {
                 ov.closeSheet()
                 if (repo.demo.value) repo.sendFile(convId, File(""), "Счёт_27_ноября.pdf", "application/pdf", "file")
-                else perms.pickFile { uri -> uri?.let { u -> copyToCache(ctx, u)?.let { (f, name, mime) -> repo.sendFile(convId, f, name, mime, "file") } } }
+                else perms.pickFile { uri ->
+                    if (uri == null) return@pickFile
+                    val got = copyToCache(ctx, uri)
+                    if (got == null) repo.toast("Не получилось прочитать файл") else repo.sendFile(convId, got.first, got.second, got.third, "file")
+                }
             }
             Tile("card", "Оплата", primary = true, modifier = Modifier.weight(1f)) {
                 val c = repo.conv(convId)
-                ov.openSheet { PaySheet(c?.contactId, "promised") }
+                if (c == null) repo.toast("Чат не найден") else ov.openSheet { PaySheet(c.contactId, "paid", title = "Записать оплату", lockClient = true) }
             }
             Tile("bolt", "Шаблон", modifier = Modifier.weight(1f)) { ov.closeSheet(); onTemplate() }
         }
@@ -595,3 +615,24 @@ fun copyToCache(ctx: Context, uri: Uri): Triple<File, String, String>? = try {
     ctx.contentResolver.openInputStream(uri)?.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
     Triple(f, name, mime)
 } catch (_: Exception) { null }
+
+
+/** Предпросмотр фото перед отправкой: картинка и подпись, как в Telegram. */
+fun openPhotoPreview(ov: Overlays, repo: Repo, convId: String, file: Triple<File, String, String>?, demoName: String?) {
+    ov.openSheet {
+        var caption by remember { mutableStateOf("") }
+        SheetTitle("Отправить фото")
+        Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(16.dp)).background(Sg.c.hair)) {
+            if (file != null) coil.compose.AsyncImage(file.first, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+            else DemoPhoto(demoName, Modifier.fillMaxSize())
+        }
+        Spacer(Modifier.height(12.dp))
+        ru.sguardo.app.ui.SField(caption, { caption = it }, "Подпись", "edit", singleLine = false)
+        Spacer(Modifier.height(16.dp))
+        ru.sguardo.app.ui.Btn("Отправить", icon = "send", wide = true) {
+            ov.closeSheet()
+            if (file != null) repo.sendFile(convId, file.first, file.second, file.third, "image", caption = caption.trim())
+            else repo.sendFile(convId, File(""), demoName ?: "demo:0", "", "image", caption = caption.trim())
+        }
+    }
+}

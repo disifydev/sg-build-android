@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -71,6 +72,7 @@ import ru.sguardo.app.data.Fmt
 import ru.sguardo.app.data.Message
 import ru.sguardo.app.ui.Ic
 import ru.sguardo.app.ui.LocalRepo
+import ru.sguardo.app.ui.LocalOv
 import ru.sguardo.app.ui.T
 import ru.sguardo.app.ui.theme.Sg
 import ru.sguardo.app.ui.theme.body
@@ -141,10 +143,18 @@ fun BubbleBody(m: Message, c: Conversation, compact: Boolean = false, onQuote: (
             Row(Modifier.align(Alignment.End)) { Meta(m, fg) }
         }
         "photo", "video" -> Column(Modifier.width(250.dp).clip(shape).background(bg).padding(4.dp)) {
-            val repo = LocalRepo.current
-            val url = repo.api.media(m.att?.url)
-            if (url == null || m.att?.name?.startsWith("demo:") == true) DemoPhoto(m.att?.name, Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)))
-            else AsyncImage(url, null, Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)).background(Sg.c.hair), contentScale = ContentScale.Crop)
+            val repo = LocalRepo.current; val ov = LocalOv.current; val ctx = LocalContext.current
+            val url = imageUrl(repo, m.att)
+            val demoPic = url == null || m.att?.name?.startsWith("demo:") == true
+            val open = Modifier.clickable(enabled = !compact) {
+                if (m.kind == "video") openAttachment(ctx, repo, m.att)
+                else ov.layer = { PhotoViewer(if (demoPic) null else url, m.att?.name) { ov.layer = null } }
+            }
+            Box {
+                if (demoPic) DemoPhoto(m.att?.name, Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)).then(open))
+                else AsyncImage(url, null, Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)).background(Sg.c.hair).then(open), contentScale = ContentScale.Crop)
+                if (m.kind == "video") Box(Modifier.align(Alignment.Center).size(48.dp).background(Color.Black.copy(alpha = .35f), CircleShape), contentAlignment = Alignment.Center) { Ic("play", Color.White) }
+            }
             Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 2.dp)) {
                 if (m.text.isNotBlank()) TextWithMeta(m.text, fg, m) else Row(Modifier.align(Alignment.End)) { Meta(m, fg) }
                 if (reaction != null) ReactionChip(reaction, fg)
@@ -211,12 +221,17 @@ fun TextWithMeta(text: String, fg: Color, m: Message) {
 
 @Composable
 private fun FileRow(m: Message, out: Boolean, fg: Color) {
+    val repo = LocalRepo.current; val ctx = LocalContext.current
     val name = m.att?.name ?: "Файл"
-    val size = Fixture.sizes[name] ?: name.substringAfterLast('.', "").uppercase()
-    Row(Modifier.widthIn(min = 210.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    val ext = name.substringAfterLast('.', "").uppercase()
+    val remote by produceState<String?>(Fixture.sizes[name], m.att?.url) { if (value == null && !repo.demo.value) value = remoteSize(repo, m.att)?.let { fmtSize(it) } }
+    Row(Modifier.widthIn(min = 210.dp).clip(RoundedCornerShape(12.dp)).clickable { openAttachment(ctx, repo, m.att) }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).background(if (out) Sg.c.onPc else Sg.c.teal, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Ic("file", if (out) Sg.c.pc else Sg.c.onTeal) }
         Spacer(Modifier.width(10.dp))
-        Column(Modifier.widthIn(max = 200.dp)) { T(name, body(14f, FontWeight.SemiBold), fg, maxLines = 1); T(size, body(12f), fg.copy(alpha = .7f)) }
+        Column(Modifier.widthIn(max = 200.dp)) {
+            T(name, body(14f, FontWeight.SemiBold), fg, maxLines = 1)
+            T(listOfNotNull(remote, ext.ifBlank { null }).joinToString(" · ").ifBlank { "файл" }, body(12f), fg.copy(alpha = .7f))
+        }
     }
 }
 
@@ -232,12 +247,15 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
     var pos by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
     val player = remember { mutableStateOf<MediaPlayer?>(null) }
-    DisposableEffect(Unit) { onDispose { player.value?.release() } }
+    val hub = LocalPlayer.current
+    DisposableEffect(Unit) { onDispose { player.value?.release(); hub.release(m.id) } }
+    // включили другое голосовое или кружок — это ставим на паузу
+    LaunchedEffect(hub.current) { if (hub.current != m.id && playing) { playing = false; player.value?.pause() } }
     LaunchedEffect(playing) {
         while (playing) {
             val p = player.value
             if (p != null) { pos = p.currentPosition / 1000f; if (!p.isPlaying && pos > 0 && p.currentPosition >= p.duration - 50) { playing = false; pos = 0f } }
-            else { pos += .1f; if (pos >= len) { playing = false; pos = 0f } }
+            else { pos += .1f; if (pos >= len) { playing = false; pos = 0f; hub.release(m.id) } }
             delay(100)
         }
     }
@@ -245,7 +263,8 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
     val wave = m.att?.waveform
     Row(Modifier.widthIn(min = 210.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(38.dp).clip(CircleShape).background(if (out) Sg.c.onPc else Sg.c.teal).clickable {
-            if (playing) { playing = false; player.value?.pause(); return@clickable }
+            if (playing) { playing = false; player.value?.pause(); hub.release(m.id); return@clickable }
+            hub.claim(m.id)
             val url = repo.api.media(m.att?.url)
             if (url != null && !repo.demo.value) {
                 if (player.value == null) {
@@ -254,7 +273,8 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
                         val headers = if (repo.api.isOwn(url)) mapOf("Cookie" to repo.api.cookies.loadForRequest(repo.api.url("/")).joinToString("; ") { "${it.name}=${it.value}" }) else emptyMap()
                         mp.setDataSource(ctx, Uri.parse(url), headers)
                         mp.setOnPreparedListener { it.start(); playing = true }
-                        mp.setOnCompletionListener { playing = false; pos = 0f }
+                        mp.setOnCompletionListener { playing = false; pos = 0f; hub.release(m.id) }
+                        mp.setOnErrorListener { _, _, _ -> playing = false; repo.toast("Не получилось воспроизвести голосовое"); true }
                         mp.prepareAsync(); player.value = mp
                     } catch (_: Exception) { repo.toast("Не получилось включить голосовое") }
                 } else { player.value?.start(); playing = true }
@@ -274,26 +294,51 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
     }
 }
 
-/** Кружок: видео в круге, по нажатию растёт и играет, по краю бежит кольцо. */
+/** Кружок как в Telegram: по нажатию растёт и играет со звуком, по краю бежит кольцо, повторное нажатие — пауза. */
 @Composable
 fun CircleMsg(m: Message, compact: Boolean) {
     val repo = LocalRepo.current
+    val hub = LocalPlayer.current
     val len = (m.att?.duration ?: 1.0).toInt().coerceAtLeast(1)
+    var started by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }
     val prog = remember { Animatable(0f) }
+    val video = remember { mutableStateOf<VideoView?>(null) }
     val scope = rememberCoroutineScope()
-    val size by animateDpAsState(if (compact) 140.dp else if (playing) 244.dp else 200.dp, spring(dampingRatio = .6f, stiffness = 300f), label = "cv")
-    val url = repo.api.media(m.att?.url)
+    val size by animateDpAsState(if (compact) 140.dp else if (started) 244.dp else 200.dp, spring(dampingRatio = .7f, stiffness = 500f), label = "cv")
+    val url = imageUrl(repo, m.att)
+    val real = url != null && !repo.demo.value
+    fun stop() { playing = false; started = false; video.value?.pause(); hub.release(m.id); scope.launch { prog.snapTo(0f) } }
+    LaunchedEffect(hub.current) { if (hub.current != m.id && started) { playing = false; started = false; video.value?.pause(); prog.snapTo(0f) } }
+    LaunchedEffect(playing) {
+        if (!playing) return@LaunchedEffect
+        if (!real) {
+            prog.animateTo(1f, tween(((1f - prog.value) * len * 1000).toInt().coerceAtLeast(1), easing = LinearEasing))
+            stop(); return@LaunchedEffect
+        }
+        while (playing) {
+            val v = video.value
+            if (v != null && v.duration > 0) prog.snapTo(v.currentPosition / v.duration.toFloat())
+            delay(50)
+        }
+    }
     Box(Modifier.size(size).clip(CircleShape).clickable(enabled = !compact) {
-        playing = !playing
-        scope.launch { if (playing) { prog.snapTo(0f); prog.animateTo(1f, tween(len * 1000, easing = LinearEasing)); playing = false; prog.snapTo(0f) } else prog.snapTo(0f) }
+        when {
+            !started -> { hub.claim(m.id); started = true; playing = true; video.value?.start() }
+            playing -> { playing = false; video.value?.pause() }
+            else -> { hub.claim(m.id); playing = true; video.value?.start() }
+        }
     }) {
-        if (url != null && !repo.demo.value && playing) {
+        if (real && started) {
             AndroidView({ ctx -> VideoView(ctx).apply {
-                val headers = if (repo.api.isOwn(url)) mapOf("Cookie" to repo.api.cookies.loadForRequest(repo.api.url("/")).joinToString("; ") { "${it.name}=${it.value}" }) else emptyMap()
-                setVideoURI(Uri.parse(url), headers); setOnPreparedListener { it.isLooping = false; start() }
-            } }, Modifier.fillMaxSize())
-        } else if (url != null && !repo.demo.value) {
+                val headers = if (repo.api.isOwn(url!!)) mapOf("Cookie" to repo.api.cookies.loadForRequest(repo.api.url("/")).joinToString("; ") { "${it.name}=${it.value}" }) else emptyMap()
+                setVideoURI(Uri.parse(url), headers)
+                setOnPreparedListener { it.isLooping = false; if (playing) start() }
+                setOnCompletionListener { stop() }
+                setOnErrorListener { _, _, _ -> stop(); repo.toast("Не получилось воспроизвести кружок"); true }
+                video.value = this
+            } }, Modifier.fillMaxSize(), onRelease = { video.value = null })
+        } else if (real) {
             AsyncImage(url, null, Modifier.fillMaxSize().background(Sg.c.hair), contentScale = ContentScale.Crop)
         } else DemoCam(false, Modifier.fillMaxSize())
         Canvas(Modifier.fillMaxSize()) {
@@ -302,7 +347,7 @@ fun CircleMsg(m: Message, compact: Boolean) {
         if (!playing) Box(Modifier.align(Alignment.Center).size(48.dp).background(Color.Black.copy(alpha = .35f), CircleShape), contentAlignment = Alignment.Center) { Ic("play", Color.White) }
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).height(22.dp).background(Color.Black.copy(alpha = .4f), RoundedCornerShape(11.dp)).padding(horizontal = 9.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            T(Fmt.dur(len), body(11.5f), Color.White)
+            T(if (started) Fmt.dur((prog.value * len).toInt()) else Fmt.dur(len), body(11.5f), Color.White)
             if (m.isOut) { Spacer(Modifier.width(3.dp)); Ic(if (m.pending) "clock" else "checks", Color.White, size = 13.dp) }
         }
         m.reactions?.firstOrNull()?.let { r ->

@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -125,6 +126,8 @@ class RecState(val circle: Boolean, val started: Long) {
     var dy by mutableFloatStateOf(0f)
     var cancelled by mutableStateOf(false)
     var level by mutableFloatStateOf(0f)
+    /** последние уровни громкости для живой волны */
+    val levels = androidx.compose.runtime.mutableStateListOf<Float>()
     var flash by mutableStateOf(false)
     var back by mutableStateOf(false)
 }
@@ -167,6 +170,11 @@ fun Composer(
         AnimatedVisibility(showTpl, enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 2 }, exit = fadeOut(tween(180))) {
             Box(Modifier.padding(horizontal = 2.dp)) {
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (st.templates.isEmpty()) item {
+                        Box(Modifier.height(34.dp).clip(RoundedCornerShape(10.dp)).background(Sg.c.cHigh).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                            T("Шаблонов пока нет: их добавляют в кабинете на сайте", body(13.5f), Sg.c.muted, maxLines = 1)
+                        }
+                    }
                     items(st.templates.size) { i ->
                         val t = st.templates[i]
                         Box(Modifier.height(34.dp).clip(RoundedCornerShape(10.dp)).background(Sg.c.cHigh).drawBehind {}.clickable { text.value = t.text; onTplToggle() }
@@ -203,14 +211,28 @@ fun Composer(
                             val upEarly = withTimeoutOrNull(220) { waitForUpOrCancellation() }
                             if (upEarly != null) {
                                 circleMode = !circleMode
-                                repo.toast(if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
+                                val need = !repo.demo.value && (if (circleMode) !(perms.hasCamera() && perms.hasAudio()) else !perms.hasAudio())
+                                if (need) {
+                                    // доступ спрашиваем сразу, чтобы удержание потом сразу писало
+                                    val what = if (circleMode) "камере и микрофону" else "микрофону"
+                                    val done: (Boolean) -> Unit = { ok -> repo.toast(if (ok) (if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
+                                        else "Без доступа к $what записать не получится. Разрешите его в настройках телефона") }
+                                    if (circleMode) perms.camera(done) else perms.audio(done)
+                                } else repo.toast(if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
                                 return@awaitEachGesture
                             }
                             val r = RecState(circleMode, System.currentTimeMillis())
                             var ok = true
                             if (!repo.demo.value) {
                                 ok = if (circleMode) perms.hasCamera() && perms.hasAudio() else perms.hasAudio()
-                                if (!ok) { if (circleMode) perms.camera { } else perms.audio { }; repo.toast("Разрешите доступ к ${if (circleMode) "камере и микрофону" else "микрофону"} и нажмите ещё раз"); return@awaitEachGesture }
+                                if (!ok) {
+                                    val what = if (circleMode) "камере и микрофону" else "микрофону"
+                                    val done: (Boolean) -> Unit = { granted ->
+                                        repo.toast(if (granted) "Готово. Удерживайте кнопку, чтобы записать" else "Без доступа к $what записать не получится. Разрешите его в настройках телефона")
+                                    }
+                                    if (circleMode) perms.camera(done) else perms.audio(done)
+                                    return@awaitEachGesture
+                                }
                             }
                             rec.value = r
                             val sx = down.position.x; val sy = down.position.y
@@ -259,6 +281,14 @@ private fun RecUi(r: RecState, onCancel: () -> Unit) {
         else Box(Modifier.size(10.dp).graphicsLayer { alpha = a }.background(Color(0xFFE5484D), CircleShape))
         Spacer(Modifier.width(10.dp))
         T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f), modifier = Modifier.width(60.dp))
+        // живая волна громкости
+        Row(Modifier.width(54.dp).height(24.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            val l = r.levels.takeLast(14)
+            repeat(14) { i ->
+                val v = l.getOrNull(i - (14 - l.size)) ?: 0f
+                Box(Modifier.width(2.dp).fillMaxHeight((.18f + v.coerceIn(0f, 1f) * .82f)).clip(RoundedCornerShape(1.dp)).background(Sg.c.primary.copy(alpha = .45f + i / 14f * .55f)))
+            }
+        }
         if (r.locked) T("Отмена", body(15f, FontWeight.SemiBold), Sg.c.primary, modifier = Modifier.weight(1f).padding(end = 40.dp).clickable(onClick = onCancel), align = androidx.compose.ui.text.style.TextAlign.Center)
         else Row(Modifier.weight(1f).padding(end = 40.dp).offset { IntOffset((r.dx * .7f * density).roundToInt(), 0) }.graphicsLayer { alpha = (1 + r.dx / 140).coerceIn(0f, 1f) },
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -326,7 +356,7 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean) {
                     cam.recording = pending.start(ContextCompat.getMainExecutor(ctx)) { e -> if (e is VideoRecordEvent.Finalize) cam.onDone?.invoke(if (e.hasError()) null else f) }
                 }
                 if (r.flash) cam.torch(true)
-            } catch (_: Exception) {}
+            } catch (e: Exception) { ru.sguardo.app.data.Repo.get(ctx).toast("Камера не запустилась: ${e.message ?: "занята другим приложением"}") }
         }, ContextCompat.getMainExecutor(ctx))
         onDispose { }
     }

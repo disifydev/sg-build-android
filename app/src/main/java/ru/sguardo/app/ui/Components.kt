@@ -152,8 +152,8 @@ fun Seg(options: List<Triple<String, String, Int>>, selected: String, onSelect: 
         modifier.fillMaxWidth().padding(horizontal = hpad).border(1.dp, Sg.c.outline, RoundedCornerShape(22.dp)).padding(3.dp)
     ) {
         val W = maxWidth
-        val x by animateDpAsState(W * (weights.take(idx).sum() / total), spring(dampingRatio = 0.62f, stiffness = 420f), label = "segx")
-        val w by animateDpAsState(W * (weights[idx] / total), spring(dampingRatio = 0.62f, stiffness = 420f), label = "segw")
+        val x by animateDpAsState(W * (weights.take(idx).sum() / total), spring(dampingRatio = 0.78f, stiffness = 900f), label = "segx")
+        val w by animateDpAsState(W * (weights[idx] / total), spring(dampingRatio = 0.78f, stiffness = 900f), label = "segw")
         Box(Modifier.offset(x = x).width(w).height(36.dp).background(Sg.c.sc, RoundedCornerShape(18.dp)))
         Row(Modifier.fillMaxWidth()) {
             options.forEachIndexed { i, (k, label, n) ->
@@ -162,7 +162,7 @@ fun Seg(options: List<Triple<String, String, Int>>, selected: String, onSelect: 
                     Modifier.weight(weights[i]).height(36.dp).clip(RoundedCornerShape(18.dp)).clickable { onSelect(k) }.padding(horizontal = 6.dp),
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AnimatedVisibility(on, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+                    AnimatedVisibility(on, enter = fadeIn(tween(120)) + expandHorizontally(tween(160)), exit = fadeOut(tween(80)) + shrinkHorizontally(tween(120))) {
                         Ic("check", if (on) Sg.c.onSc else Sg.c.fg, size = 15.dp, modifier = Modifier.padding(end = 5.dp))
                     }
                     T(label, body(12.5f, FontWeight.SemiBold), if (on) Sg.c.onSc else Sg.c.fg, maxLines = 1, modifier = Modifier.weight(1f, fill = false))

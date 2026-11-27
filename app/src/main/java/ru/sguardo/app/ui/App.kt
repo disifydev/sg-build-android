@@ -165,7 +165,7 @@ fun SgApp(repo: Repo, permissions: Permissions) {
         val phase by repo.phase.collectAsState()
         val onboarded by prefs.onboarded.collectAsState()
         var splash by remember { mutableStateOf(true) }
-        LaunchedEffect(Unit) { delay(1400); splash = false }
+        LaunchedEffect(Unit) { delay(650); splash = false }
         val ui = remember { UiState() }
         val ov = remember { Overlays() }
         CompositionLocalProvider(LocalRepo provides repo, LocalUi provides ui, LocalOv provides ov, LocalPerms provides permissions) {
@@ -222,10 +222,10 @@ fun MainNav(ui: UiState) {
     CompositionLocalProvider(LocalNav provides nav) {
         NavHost(
             nc, startDestination = "tabs",
-            enterTransition = { slideInHorizontally(tween(380, easing = EaseM3)) { (it * 0.13f).toInt() } + fadeIn(tween(380, easing = EaseM3)) },
-            exitTransition = { slideOutHorizontally(tween(200, easing = EaseOut)) { -(it * 0.11f).toInt() } + fadeOut(tween(200)) },
-            popEnterTransition = { slideInHorizontally(tween(360, easing = EaseM3)) { -(it * 0.11f).toInt() } + fadeIn(tween(360)) },
-            popExitTransition = { slideOutHorizontally(tween(220, easing = EaseOut)) { (it * 0.11f).toInt() } + fadeOut(tween(220)) },
+            enterTransition = { slideInHorizontally(tween(220, easing = EaseM3)) { (it * 0.08f).toInt() } + fadeIn(tween(160)) },
+            exitTransition = { fadeOut(tween(120)) },
+            popEnterTransition = { fadeIn(tween(160)) },
+            popExitTransition = { slideOutHorizontally(tween(180, easing = EaseOut)) { (it * 0.08f).toInt() } + fadeOut(tween(160)) },
         ) {
             composable("tabs") { TabsScreen() }
             composable("chat/{id}") { ChatScreen(it.arguments?.getString("id") ?: "") }
@@ -250,8 +250,9 @@ fun TabsScreen() {
     val ui = LocalUi.current
     Column(Modifier.fillMaxSize().background(Sg.c.surface)) {
         Box(Modifier.weight(1f)) {
+            // вкладки переключаются мгновенно: короткое проявление без масштаба, старая вкладка сразу уходит
             androidx.compose.animation.AnimatedContent(ui.tab, transitionSpec = {
-                (fadeIn(tween(300, easing = EaseM3)) + scaleIn(tween(300, easing = EaseM3), initialScale = .97f)) togetherWith fadeOut(tween(90))
+                fadeIn(tween(140)) togetherWith fadeOut(tween(0))
             }, label = "tab") { t ->
                 when (t) {
                     "home" -> HomeScreen(); "msgs" -> MessagesScreen(); "clients" -> ClientsScreen(); "pays" -> PaysScreen(); else -> MoreScreen()

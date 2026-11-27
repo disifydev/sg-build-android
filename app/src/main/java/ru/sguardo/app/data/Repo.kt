@@ -81,10 +81,19 @@ class Repo private constructor(private val ctx: Context) {
     fun toast(text: String, undo: (() -> Unit)? = null) { toasts.tryEmit(ToastMsg(text, undo)) }
 
     // ---------- выборки ----------
-    fun contact(id: String?) = state.value.contacts.firstOrNull { it.id == id }
-    fun conv(id: String?) = state.value.conversations.firstOrNull { it.id == id }
-    fun convOf(contactId: String) = state.value.conversations.filter { it.contactId == contactId && !it.trashed }.maxByOrNull { it.last?.time ?: 0 }
-    fun folder(id: String?) = state.value.folders.firstOrNull { it.id == id }
+    // индексы по id пересчитываются только когда меняется само состояние (строки списков не ищут перебором)
+    private class Index(val s: AppState) {
+        val contacts = s.contacts.associateBy { it.id }
+        val convs = s.conversations.associateBy { it.id }
+        val convOf = s.conversations.filter { !it.trashed }.groupBy { it.contactId }.mapValues { (_, l) -> l.maxByOrNull { it.last?.time ?: 0 } }
+        val folders = s.folders.associateBy { it.id }
+    }
+    @Volatile private var index: Index? = null
+    private fun idx(): Index { val s = state.value; return index?.takeIf { it.s === s } ?: Index(s).also { index = it } }
+    fun contact(id: String?) = id?.let { idx().contacts[it] }
+    fun conv(id: String?) = id?.let { idx().convs[it] }
+    fun convOf(contactId: String) = idx().convOf[contactId]
+    fun folder(id: String?) = id?.let { idx().folders[it] }
 
     /** Имя из телефонной книги, если включено и номер там есть. */
     fun bookName(c: Contact?): String? {
@@ -412,18 +421,19 @@ class Repo private constructor(private val ctx: Context) {
     }
 
     /** Загрузить файл (фото, голосовое, кружок, документ) и отправить. */
-    fun sendFile(convId: String, file: File, name: String, mime: String, kind: String, round: Boolean = false, duration: Int? = null) {
+    fun sendFile(convId: String, file: File, name: String, mime: String, kind: String, round: Boolean = false, duration: Int? = null, caption: String = "") {
         if (demo.value) {
             val a = Attachment(kind = kind, name = name, url = "", round = round, duration = duration?.toDouble())
-            send(convId, "", attachments = listOf(a)); return
+            send(convId, caption, attachments = listOf(a)); return
         }
-        val tmp = Message(id = "tmp-${System.nanoTime()}", dir = "out", at = isoOf(Clock.now()), pending = true,
+        if (!file.exists() || file.length() == 0L) { toast("Файл пустой или не сохранился, попробуйте ещё раз"); return }
+        val tmp = Message(id = "tmp-${System.nanoTime()}", dir = "out", text = caption, at = isoOf(Clock.now()), pending = true,
             attachments = listOf(Attachment(kind = kind, name = name, url = file.toURI().toString(), round = round, duration = duration?.toDouble())))
         pending.value = pending.value + (convId to (pending.value[convId].orEmpty() + tmp))
         scope.launch {
             try {
                 val a = api.upload(file, name, mime)
-                val body = obj("conversationId" to convId, "text" to "", "attachments" to listOf(mapOf("mediaId" to (a.mediaId ?: ""), "round" to round)))
+                val body = obj("conversationId" to convId, "text" to caption, "attachments" to listOf(mapOf("mediaId" to (a.mediaId ?: ""), "round" to round)))
                 applyStateFrom(api.call("POST", "/api/messages/send/", body))
             } catch (e: Exception) { toast("Не отправлено: ${friendly(e)}") }
             finally { pending.value = pending.value + (convId to pending.value[convId].orEmpty().filter { it.id != tmp.id }) }
@@ -755,10 +765,15 @@ object DemoReducer {
                     folderId = a.s("folderId") ?: s.folders.firstOrNull()?.id, tags = tags, firstContactAt = now)) + s.contacts)
             }
             "removeContact" -> s.copy(contacts = s.contacts.filter { it.id != a.s("contactId") }, conversations = s.conversations.filter { it.contactId != a.s("contactId") })
-            "pay" -> s.copy(deals = listOf(Deal(r.nextId("d"), a.s("contactId")!!, a.s("productId"), a.l("amount") ?: 0, "paid", now)) + s.deals)
+            "pay" -> {
+                val dealId = a.s("dealId")
+                if (dealId != null && s.deals.any { it.id == dealId }) s.copy(deals = s.deals.map { if (it.id == dealId) it.copy(status = "paid", date = now, dueAt = null) else it },
+                    reminders = s.reminders.map { if (it.contactId == a.s("contactId")) it.copy(done = true) else it })
+                else s.copy(deals = listOf(Deal(r.nextId("d"), a.s("contactId")!!, a.s("productId"), a.l("amount") ?: 0, "paid", now)) + s.deals)
+            }
             "promise" -> s.copy(deals = listOf(Deal(r.nextId("d"), a.s("contactId")!!, a.s("productId"), a.l("amount") ?: 0, "promised", now, a.s("remindAt"))) + s.deals,
                 reminders = s.reminders + Reminder(r.nextId("r"), a.s("contactId")!!, a.s("remindAt") ?: now, "Обещал оплатить"))
-            "updateDeal" -> s.copy(deals = s.deals.map { if (it.id == a.s("id")) it.copy(status = a.s("status") ?: it.status, dueAt = a.s("dueAt") ?: it.dueAt) else it })
+            "updateDeal" -> s.copy(deals = s.deals.map { if (it.id == a.s("id")) it.copy(status = a.s("status") ?: it.status, dueAt = a.s("dueAt") ?: it.dueAt, date = if (a.s("status") == "promised") it.date else it.date) else it })
             "removeDeal" -> s.copy(deals = s.deals.filter { it.id != a.s("id") })
             "remind" -> s.copy(reminders = s.reminders + Reminder(r.nextId("r"), a.s("contactId")!!, a.s("at")!!, a.s("text") ?: ""))
             "doneReminder" -> s.copy(reminders = s.reminders.map { if (it.id == a.s("id")) it.copy(done = true) else it })
