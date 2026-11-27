@@ -32,6 +32,11 @@ class MainActivity : ComponentActivity(), Permissions {
     private val imageLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> pickDone?.invoke(u); pickDone = null }
     private val fileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u -> pickDone?.invoke(u); pickDone = null }
     private var pickManyDone: ((List<Uri>) -> Unit)? = null
+    private var photoFile: java.io.File? = null
+    private var photoDone: ((java.io.File?) -> Unit)? = null
+    private val photoLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = photoFile?.takeIf { ok && it.length() > 0 }; photoDone?.invoke(f); photoDone = null
+    }
     private val imagesLauncher = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { l -> pickManyDone?.invoke(l); pickManyDone = null }
     private val filesLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { l -> pickManyDone?.invoke(l); pickManyDone = null }
 
@@ -101,6 +106,32 @@ class MainActivity : ComponentActivity(), Permissions {
     override fun hasCamera() = granted(Manifest.permission.CAMERA)
     override fun pickImage(done: (Uri?) -> Unit) { pickDone = done; imageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     override fun pickFile(done: (Uri?) -> Unit) { pickDone = done; fileLauncher.launch(arrayOf("*/*")) }
+    private val galleryPerms: Array<String> get() = when {
+        Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+    override fun hasGallery() = when {
+        Build.VERSION.SDK_INT >= 34 -> granted(Manifest.permission.READ_MEDIA_IMAGES) || granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        Build.VERSION.SDK_INT >= 33 -> granted(Manifest.permission.READ_MEDIA_IMAGES)
+        else -> granted(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+    override fun gallery(done: (Boolean) -> Unit) {
+        if (hasGallery()) { done(true); return }
+        if (galleryPerms.any { askedSp.getBoolean(it, false) && !shouldShowRequestPermissionRationale(it) } && !hasGallery()) { openSettings(); done(false); return }
+        val need = galleryPerms
+        askedSp.edit().apply { need.forEach { putBoolean(it, true) } }.apply()
+        permDone = { _ -> done(hasGallery()) }; permLauncher.launch(need)
+    }
+    override fun takePhoto(done: (java.io.File?) -> Unit) {
+        ask(arrayOf(Manifest.permission.CAMERA)) { ok ->
+            if (!ok) { repo.toast(if (isBlocked(Manifest.permission.CAMERA)) "Нет доступа к камере: включите его в настройках Sguardo" else "Без доступа к камере снять фото не получится"); if (isBlocked(Manifest.permission.CAMERA)) openSettings(); done(null); return@ask }
+            val f = java.io.File(cacheDir, "photo-${System.currentTimeMillis()}.jpg")
+            photoFile = f; photoDone = done
+            try { photoLauncher.launch(androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", f)) }
+            catch (_: Exception) { photoDone = null; repo.toast("Не нашли приложение камеры"); done(null) }
+        }
+    }
     override fun pickImages(done: (List<Uri>) -> Unit) { pickManyDone = done; imagesLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     override fun pickFiles(done: (List<Uri>) -> Unit) { pickManyDone = done; filesLauncher.launch(arrayOf("*/*")) }
     private fun granted(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED

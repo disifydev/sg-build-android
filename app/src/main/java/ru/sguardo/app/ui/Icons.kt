@@ -76,6 +76,7 @@ private val IC: Map<String, List<String>> = mapOf(
     "lockO" to listOf("R:4,11,16,11,2.5", "P:M8 11V7a4 4 0 0 1 7.8-1.3"),
     "flip" to listOf("P:M20 5h-3.2L15 3H9L7.2 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z", "P:M9 12.5a3 3 0 0 0 5.6 1.5M15 11.5a3 3 0 0 0-5.6-1.5M14.6 16v-2h-2M9.4 8v2h2"),
     "vcirc" to listOf("C:12,12,9.5", "R:6.5,9.5,7.5,5,1.3", "P:m14 11.3 3.5-1.8v5l-3.5-1.8"),
+    "camera" to listOf("P:M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z", "C:12,13,3.5"),
     "image" to listOf("R:3,3,18,18,3", "C:9,9,2", "P:m21 15-5-5L5 21"),
     "file" to listOf("P:M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "P:M14 2v6h6"),
     "sliders" to listOf("P:M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1", "C:15,6,2", "C:9,12,2", "C:17,18,2"),

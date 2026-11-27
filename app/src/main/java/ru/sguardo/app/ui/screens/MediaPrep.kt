@@ -125,16 +125,7 @@ private fun MediaPrep(convId: String, initial: List<PrepItem>, files: Boolean, i
     val send: () -> Unit = {
         val list = items.toList(); val cap = caption.trim()
         close()
-        repo.scope.launch {
-            list.forEachIndexed { i, it ->
-                val c = if (i == 0) cap else ""
-                if (it.file == null) { withContext(Dispatchers.Main) { repo.sendFile(convId, File(""), it.name, "", if (files) "file" else "image", caption = c) }; return@forEachIndexed }
-                val f = if (!files && compress && it.isImage && !it.isVideo) withContext(Dispatchers.IO) { compressImage(ctx, it.file) } else it.file
-                val (name, mime) = if (f !== it.file) it.name.substringBeforeLast('.') + ".jpg" to "image/jpeg" else it.name to it.mime
-                val kind = when { files -> "file"; it.isVideo -> "video"; it.isImage -> "image"; else -> "file" }
-                withContext(Dispatchers.Main) { repo.sendFile(convId, f, name, mime, kind, caption = c) }
-            }
-        }
+        repo.scope.launch { sendPrepared(repo, ctx, convId, list, cap, compress, files) }
     }
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = appear.value; translationY = (1 - appear.value) * 60.dp.toPx() }.background(bg)
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}.windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
@@ -210,7 +201,7 @@ private fun MediaPrep(convId: String, initial: List<PrepItem>, files: Boolean, i
                 Spacer(Modifier.width(8.dp))
                 Box {
                     Box(Modifier.size(50.dp).clip(CircleShape).background(Sg.c.primary).clickable(onClick = send), contentAlignment = Alignment.Center) { Ic("send", Sg.c.onPrimary) }
-                    AnimatedVisibility(items.size > 1, Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    if (items.size > 1) Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)) {
                         Box(Modifier.size(22.dp).border(2.dp, bg, CircleShape).clip(CircleShape).background(Sg.c.teal), contentAlignment = Alignment.Center) {
                             T(items.size.toString(), body(11f, FontWeight.Bold), Sg.c.onTeal)
                         }
@@ -218,6 +209,19 @@ private fun MediaPrep(convId: String, initial: List<PrepItem>, files: Boolean, i
                 }
             }
         }
+    }
+}
+
+/** Отправка подготовленного: подпись у первого, фото по желанию сжимаются. */
+suspend fun sendPrepared(repo: Repo, ctx: Context, convId: String, list: List<PrepItem>, cap: String, compress: Boolean, files: Boolean) {
+    if (list.isEmpty()) { repo.toast("Не получилось прочитать файл"); return }
+    list.forEachIndexed { i, it ->
+        val c = if (i == 0) cap else ""
+        if (it.file == null) { withContext(Dispatchers.Main) { repo.sendFile(convId, File(""), it.name, "", if (files || !it.isImage) "file" else "image", caption = c) }; return@forEachIndexed }
+        val f = if (!files && compress && it.isImage && !it.isVideo) withContext(Dispatchers.IO) { compressImage(ctx, it.file) } else it.file
+        val (name, mime) = if (f !== it.file) it.name.substringBeforeLast('.') + ".jpg" to "image/jpeg" else it.name to it.mime
+        val kind = when { files -> "file"; it.isVideo -> "video"; it.isImage -> "image"; else -> "file" }
+        withContext(Dispatchers.Main) { repo.sendFile(convId, f, name, mime, kind, caption = c) }
     }
 }
 

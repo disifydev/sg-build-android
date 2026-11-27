@@ -583,60 +583,13 @@ fun openScheduledList(ov: Overlays, repo: Repo, convId: String) {
     }
 }
 
-/** Вложения как в Telegram: в демо — сетка фото с выбором нескольких; внизу круглые кнопки «Галерея», «Файл», «Оплата», «Шаблон». */
+/** Вложения как в Telegram: сетка последних фото с камерой и выбором нескольких, внизу круглые кнопки. */
 fun openAttach(ov: Overlays, repo: Repo, perms: ru.sguardo.app.ui.Permissions, ctx: Context, convId: String, onTemplate: () -> Unit) {
-    ov.openSheet {
-        val picked = remember { mutableStateListOf<Int>() }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SheetTitle(if (picked.isEmpty()) "Вложения" else "Выбрано: ${picked.size}")
-        }
-        if (repo.demo.value) {
-            Column(Modifier.clip(RoundedCornerShape(18.dp)), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                (0 until 2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    (0 until 3).forEach { col -> val i = row * 3 + col
-                        val n = picked.indexOf(i)
-                        val k by androidx.compose.animation.core.animateFloatAsState(if (n >= 0) 1f else 0f, spring(dampingRatio = .6f, stiffness = 500f), label = "pk")
-                        Box(Modifier.weight(1f).aspectRatio(1f).clickable { if (n >= 0) picked.remove(i) else picked.add(i) }) {
-                            Box(Modifier.fillMaxSize().graphicsLayer { scaleX = 1f - .08f * k; scaleY = 1f - .08f * k }.clip(RoundedCornerShape((k * 10).dp)).background(GAL[i]))
-                            // кружок выбора с номером, как в Telegram
-                            Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp).clip(CircleShape).background(if (n >= 0) Sg.c.teal else Color.Black.copy(alpha = .18f))
-                                .border(1.6.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                                if (n >= 0) T("${n + 1}", body(12f, FontWeight.Bold), Sg.c.onTeal)
-                            }
-                        }
-                    }
-                } }
-            }
-            Spacer(Modifier.height(14.dp))
-        }
-        androidx.compose.animation.AnimatedContent(picked.isNotEmpty(), label = "att") { many ->
-            if (many) ru.sguardo.app.ui.Btn("Далее: подпись и отправка", icon = "send", wide = true) {
-                val list = picked.map { PrepItem(null, "demo:$it", "image/jpeg") }
-                ov.closeSheet(); openMediaPrep(ov, convId, list)
-            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                AttachBtn("image", "Галерея", Color(0xFF3E8BE8)) {
-                    ov.closeSheet()
-                    if (repo.demo.value) openMediaPrep(ov, convId, listOf(PrepItem(null, "demo:0", "image/jpeg")))
-                    else perms.pickImages { uris -> if (uris.isNotEmpty()) openMediaPrep(ov, convId, prepFromUris(ctx, uris).ifEmpty { repo.toast("Не получилось прочитать файл"); emptyList() }) }
-                }
-                AttachBtn("file", "Файл", Color(0xFF1FA39A)) {
-                    ov.closeSheet()
-                    if (repo.demo.value) repo.sendFile(convId, File(""), "Счёт_27_ноября.pdf", "application/pdf", "file")
-                    else perms.pickFiles { uris -> if (uris.isNotEmpty()) openMediaPrep(ov, convId, prepFromUris(ctx, uris).ifEmpty { repo.toast("Не получилось прочитать файл"); emptyList() }, files = true) }
-                }
-                AttachBtn("card", "Оплата", Color(0xFF3FA45B)) {
-                    val c = repo.conv(convId)
-                    if (c == null) repo.toast("Чат не найден") else ov.openSheet { PaySheet(c.contactId, "paid", title = "Записать оплату", lockClient = true) }
-                }
-                AttachBtn("bolt", "Шаблон", Color(0xFFE79A2E)) { ov.closeSheet(); onTemplate() }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-    }
+    ov.openSheet { AttachSheet(convId, onTemplate) }
 }
 
 @Composable
-private fun AttachBtn(icon: String, text: String, color: Color, onClick: () -> Unit) {
+fun AttachBtn(icon: String, text: String, color: Color, onClick: () -> Unit) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val s by androidx.compose.animation.core.animateFloatAsState(if (pressed) .9f else 1f, spring(dampingRatio = .5f, stiffness = 600f), label = "ab")

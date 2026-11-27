@@ -214,6 +214,11 @@ interface Permissions {
     /** несколько фото и видео сразу (системный выбор, без доступа ко всей галерее) */
     fun pickImages(done: (List<android.net.Uri>) -> Unit) = pickImage { u -> done(listOfNotNull(u)) }
     fun pickFiles(done: (List<android.net.Uri>) -> Unit) = pickFile { u -> done(listOfNotNull(u)) }
+    /** доступ к последним фото для сетки во «Вложениях» */
+    fun hasGallery(): Boolean = false
+    fun gallery(done: (Boolean) -> Unit) = done(false)
+    /** снять фото камерой телефона (системное приложение камеры) */
+    fun takePhoto(done: (java.io.File?) -> Unit) = done(null)
     fun audioBlocked(): Boolean = false
     fun cameraBlocked(): Boolean = false
     fun notificationsBlocked(): Boolean = false
