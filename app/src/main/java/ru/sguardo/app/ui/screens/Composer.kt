@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
@@ -344,19 +345,11 @@ private fun RecUi(r: RecState, onCancel: () -> Unit) {
         if (r.cancelled) Ic("trash", Color(0xFFD93A33), size = 16.dp)
         else Box(Modifier.size(10.dp).graphicsLayer { alpha = if (r.paused) 1f else a }.background(if (r.paused) Sg.c.muted else Color(0xFFE5484D), CircleShape))
         Spacer(Modifier.width(10.dp))
-        T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f), modifier = Modifier.width(50.dp))
-        // живая волна громкости (у кружка её нет, как в Telegram)
-        if (!r.circle) Row(Modifier.padding(end = 8.dp).width(34.dp).height(24.dp), horizontalArrangement = Arrangement.spacedBy(1.5.dp), verticalAlignment = Alignment.CenterVertically) {
-            val l = r.levels.takeLast(10)
-            repeat(10) { i ->
-                val v = l.getOrNull(i - (10 - l.size)) ?: 0f
-                Box(Modifier.width(2.dp).fillMaxHeight((.18f + v.coerceIn(0f, 1f) * .82f)).clip(RoundedCornerShape(1.dp)).background(Sg.c.primary.copy(alpha = .45f + i / 10f * .55f)))
-            }
-        }
-        if (r.locked) T("Отмена", body(15f, FontWeight.SemiBold), Sg.c.primary, modifier = Modifier.weight(1f).padding(end = 18.dp).clickable(onClick = onCancel), align = androidx.compose.ui.text.style.TextAlign.Center)
-        else Row(Modifier.weight(1f).padding(end = 18.dp).offset { IntOffset((r.dx * .7f * density).roundToInt(), 0) }.graphicsLayer { alpha = (1 + r.dx / 140).coerceIn(0f, 1f) },
+        T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f).copy(fontFeatureSettings = "tnum"), maxLines = 1, modifier = Modifier.widthIn(min = 66.dp))
+        if (r.locked) T("Отмена", body(15f, FontWeight.SemiBold), Sg.c.primary, modifier = Modifier.weight(1f).padding(end = 30.dp).clickable(onClick = onCancel), align = androidx.compose.ui.text.style.TextAlign.Center)
+        else Row(Modifier.weight(1f).padding(end = 30.dp).offset { IntOffset((r.dx * .7f * density).roundToInt(), 0) }.graphicsLayer { alpha = (1 + r.dx / 140).coerceIn(0f, 1f) },
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Ic("chevL", Sg.c.muted, size = 14.dp, modifier = Modifier.offset(x = (sh + 4).dp)); T("Влево — отмена", body(13.5f), Sg.c.muted, maxLines = 1)
+            Ic("chevL", Sg.c.muted, size = 14.dp, modifier = Modifier.offset(x = sh.dp)); Spacer(Modifier.width(6.dp)); T("Влево — отмена", body(14f), Sg.c.muted, maxLines = 1)
         }
     }
 }
@@ -450,7 +443,7 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
     Box(Modifier.fillMaxSize().background(if (r.flash) Color(0xE6FFFAF0) else Color(0xE6060C0C)).clickable(enabled = false) {}) {
         val t = r.elapsed(now) / 1000f
         Column(Modifier.fillMaxWidth().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars).padding(top = 70.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(296.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(276.dp).graphicsLayer { scaleX = (.12f + .88f * appear.value) * (1 - flip.value); scaleY = .12f + .88f * appear.value }
                     .let { if (r.flash) it.drawBehind { drawCircle(Color.White.copy(alpha = .95f), size.minDimension / 2 + 16.dp.toPx()) } else it }
                     .clip(CircleShape)) {
@@ -469,9 +462,12 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
                         }
                     }
                 }
-                Canvas(Modifier.size(300.dp)) {
-                    drawArc(Color.White.copy(alpha = .95f), -90f, 360f * (t / 60f).coerceAtMost(1f), false, Offset(2.dp.toPx(), 2.dp.toPx()),
-                        Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+                // кольцо вплотную к кругу: бледная дорожка и белый прогресс до 60 с, как в Telegram
+                Canvas(Modifier.size(296.dp).graphicsLayer { scaleX = .12f + .88f * appear.value; scaleY = .12f + .88f * appear.value }) {
+                    val sw = 3.5.dp.toPx(); val inset = sw / 2 + 1.dp.toPx()
+                    val tl = Offset(inset, inset); val sz = Size(size.width - inset * 2, size.height - inset * 2)
+                    drawArc(Color.White.copy(alpha = .16f), 0f, 360f, false, tl, sz, style = Stroke(sw))
+                    drawArc(Color.White, -90f, 360f * (t / 60f).coerceIn(0.004f, 1f), false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
                 }
             }
             Spacer(Modifier.height(18.dp))
