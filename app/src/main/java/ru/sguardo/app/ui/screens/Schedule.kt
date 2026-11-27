@@ -143,7 +143,7 @@ fun ColumnScope.LessonSheet(l: Lesson) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Sg.c.cHigh)) {
         IRow("когда", "${Fmt.dayLabel(d)}, ${Fmt.hm(st)}") {}
         IRow("длительность", "$mins мин") {}
-        IRow("ученик", who) {}
+        IRow("клиент", who) {}
     }
     VGap(16.dp)
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -155,7 +155,7 @@ fun ColumnScope.LessonSheet(l: Lesson) {
         }
         Btn("Удалить", icon = "trash", small = true, kind = BtnKind.Outline, danger = true) {
             ov.closeSheet()
-            ov.confirm(DialogSpec("Удалить занятие?", "Ученик не получит уведомление об отмене.", check = if (l.seriesId != null) "И все следующие занятия этой серии" else null,
+            ov.confirm(DialogSpec("Удалить занятие?", "Клиент не получит уведомление об отмене.", check = if (l.seriesId != null) "И все следующие занятия этой серии" else null,
                 buttons = listOf(DialogBtn("Удалить занятие", danger = true) { following -> repo.deleteLesson(l, following) })))
         }
     }
@@ -177,8 +177,8 @@ fun ColumnScope.LessonEditSheet(day: LocalDate, l: Lesson?, convId: String?) {
     var rep by remember { mutableStateOf("Нет") }
     SheetTitle(if (l != null) "Изменить занятие" else "Новое занятие")
     Lbl(Fmt.dayLabel(day))
-    Lbl("Ученик")
-    SField(who, { who = it; conv = null }, "Имя ученика или группа", "user")
+    Lbl("Клиент")
+    SField(who, { who = it; conv = null }, "Имя клиента или группа", "user")
     if (conv == null && who.isNotBlank()) {
         val st = repo.state.value
         val found = st.conversations.filter { !it.trashed && repo.nameOfConv(it).contains(who.trim(), true) }.take(4)
@@ -211,12 +211,12 @@ fun ColumnScope.LessonEditSheet(day: LocalDate, l: Lesson?, convId: String?) {
     }
     VGap(18.dp)
     Btn("Сохранить", icon = "check", wide = true) {
-        if (who.isBlank()) { repo.toast("Укажите ученика"); return@Btn }
+        if (who.isBlank()) { repo.toast("Укажите клиента"); return@Btn }
         val (h, m) = time.split(":").map { it.toInt() }
         val minutes = dur.filter { it.isDigit() }.toInt()
         val extra = LessonExtra(subj, if (conv == null) who.trim() else "")
         val c = conv ?: if (repo.demo.value) "" else null
-        if (c == null) { repo.toast("Выберите ученика из списка: занятие привязывается к переписке"); return@Btn }
+        if (c == null) { repo.toast("Выберите клиента из списка: занятие привязывается к переписке"); return@Btn }
         ov.closeSheet()
         if (l != null) repo.moveLesson(l, day, h, m, minutes, extra, Fmt.weekStart(day))
         else repo.addLesson(c, day, h, m, minutes, extra, Fmt.weekStart(day), rep.filter { it.isDigit() }.toIntOrNull() ?: 0)

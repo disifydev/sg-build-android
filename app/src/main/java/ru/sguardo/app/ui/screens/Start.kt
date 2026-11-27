@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.spring
@@ -181,6 +182,9 @@ fun LoginScreen() {
     var mode by remember { mutableStateOf("password") }
     var busy by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf<String?>(null) }
+    // куда смотрит глаз: на поле почты или кода, а при вводе пароля деликатно отворачивается
+    var focus by remember { mutableStateOf("") }
+    val look = when (focus) { "email", "code" -> androidx.compose.ui.geometry.Offset(0f, 1f); "pass" -> androidx.compose.ui.geometry.Offset(.95f, -.9f); else -> null }
     val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "bg")
     val drift by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(9000, easing = androidx.compose.animation.core.LinearEasing), RepeatMode.Reverse), label = "d")
     val glow by inf.animateFloat(.85f, 1.08f, androidx.compose.animation.core.infiniteRepeatable(tween(2600), RepeatMode.Reverse), label = "g")
@@ -200,13 +204,12 @@ fun LoginScreen() {
             Column(Modifier.weight(1f).fillMaxWidth().graphicsLayer { alpha = appear.value; translationY = (1 - appear.value) * 30.dp.toPx() },
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Box(contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(150.dp).graphicsLayer { scaleX = glow; scaleY = glow }.background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(teal.copy(alpha = .45f), Color.Transparent)), CircleShape))
-                    EyeLogo(104.dp, Modifier.shadowCompat(16.dp, CircleShape))
+                    Box(Modifier.size(170.dp).graphicsLayer { scaleX = glow; scaleY = glow }.background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(teal.copy(alpha = .35f), Color.Transparent)), CircleShape))
+                    ru.sguardo.app.ui.LiveEye(230.dp, look)
                 }
-                VGap(18.dp)
                 T("Sguardo", disp(32, FontWeight.Bold))
                 VGap(6.dp)
-                T("Все переписки с учениками в одном месте", body(15f), Sg.c.muted, modifier = Modifier.padding(horizontal = 32.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+                T("Все переписки с клиентами в одном окне", body(15f), Sg.c.muted, modifier = Modifier.padding(horizontal = 32.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
             }
             // низ: карточка входа
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp).graphicsLayer { alpha = appear.value; translationY = (1 - appear.value) * 60.dp.toPx() }
@@ -223,12 +226,15 @@ fun LoginScreen() {
                     }
                 }
                 VGap(14.dp)
-                SField(email, { email = it; err = null }, "Почта", "mail", height = 54.dp, keyboard = KeyboardType.Email)
+                SField(email, { email = it; err = null }, "Почта", "mail", height = 54.dp, keyboard = KeyboardType.Email,
+                    modifier = Modifier.onFocusChanged { if (it.hasFocus) focus = "email" else if (focus == "email") focus = "" })
                 AnimatedContent(mode, transitionSpec = { (fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 10 }) togetherWith fadeOut(tween(120)) }, label = "m") { m ->
                     Column {
                         when (m) {
-                            "password" -> { VGap(10.dp); SField(pass, { pass = it; err = null }, "Пароль", "lock", height = 54.dp, keyboard = KeyboardType.Password, password = true) }
-                            "codeSent" -> { VGap(10.dp); SField(code, { code = it.filter { c -> c.isDigit() }.take(8); err = null }, "Код из письма", "shield", height = 54.dp, keyboard = KeyboardType.Number) }
+                            "password" -> { VGap(10.dp); SField(pass, { pass = it; err = null }, "Пароль", "lock", height = 54.dp, keyboard = KeyboardType.Password, password = true,
+                                modifier = Modifier.onFocusChanged { if (it.hasFocus) focus = "pass" else if (focus == "pass") focus = "" }) }
+                            "codeSent" -> { VGap(10.dp); SField(code, { code = it.filter { c -> c.isDigit() }.take(8); err = null }, "Код из письма", "shield", height = 54.dp, keyboard = KeyboardType.Number,
+                                modifier = Modifier.onFocusChanged { if (it.hasFocus) focus = "code" else if (focus == "code") focus = "" }) }
                             else -> { VGap(10.dp); T("Пришлём код на почту, пароль не нужен", body(13.5f), Sg.c.muted, modifier = Modifier.padding(start = 6.dp)) }
                         }
                     }

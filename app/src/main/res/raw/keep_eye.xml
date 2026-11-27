@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- кадры живого глаза берутся по имени (getIdentifier), R8 не должен их вырезать -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/eye_g_*" />
