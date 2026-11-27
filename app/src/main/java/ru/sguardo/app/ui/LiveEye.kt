@@ -36,12 +36,12 @@ import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.random.Random
 
-private const val COLS = 7
-private const val ROWS = 5
+private const val COLS = 9
+private const val ROWS = 7
 
 /**
- * Живой 3D-глаз Sguardo: кадры отрендерены заранее (logo/eyeframes.py, 7×5 направлений взгляда),
- * между соседними кадрами плавный переход. Сам водит взглядом; если задан look (x, y от -1 до 1, y вниз),
+ * Живой 3D-глаз Sguardo: кадры отрендерены заранее (logo/eyeframes.py, 9×7 направлений взгляда),
+ * взгляд переводится быстрыми скачками (как саккады у живого глаза), без наложения кадров. Сам водит взглядом; если задан look (x, y от -1 до 1, y вниз),
  * смотрит туда. Вокруг вращается стеклянное кольцо, задняя половина за глазом, передняя перед ним.
  */
 @Composable
@@ -63,18 +63,20 @@ fun LiveEye(size: Dp, look: Offset? = null, modifier: Modifier = Modifier) {
     // взгляд: по цели или сам по себе — то медленно ведёт, то быстро переводит, как живой
     LaunchedEffect(look) {
         if (look != null) {
-            launch { gx.animateTo(look.x.coerceIn(-1f, 1f), spring(dampingRatio = .7f, stiffness = 120f)) }
-            gy.animateTo(look.y.coerceIn(-1f, 1f), spring(dampingRatio = .7f, stiffness = 120f))
+            launch { gx.animateTo(look.x.coerceIn(-1f, 1f), spring(dampingRatio = 1f, stiffness = 700f)) }
+            gy.animateTo(look.y.coerceIn(-1f, 1f), spring(dampingRatio = 1f, stiffness = 700f))
             return@LaunchedEffect
         }
         val rnd = Random(System.nanoTime())
         while (true) {
-            val quick = rnd.nextFloat() < .35f
-            val tx = (rnd.nextFloat() * 2 - 1) * .85f; val ty = (rnd.nextFloat() * 2 - 1) * .75f
-            val spec = if (quick) spring<Float>(dampingRatio = .75f, stiffness = 260f) else spring(dampingRatio = .9f, stiffness = 28f)
+            // чаще короткий взгляд рядом, иногда далеко; между скачками глаз «замирает» и разглядывает
+            val far = rnd.nextFloat() < .4f
+            val tx = if (far) (rnd.nextFloat() * 2 - 1) * .9f else (gx.value + (rnd.nextFloat() * 2 - 1) * .35f).coerceIn(-.9f, .9f)
+            val ty = if (far) (rnd.nextFloat() * 2 - 1) * .8f else (gy.value + (rnd.nextFloat() * 2 - 1) * .3f).coerceIn(-.8f, .8f)
+            val spec = spring<Float>(dampingRatio = 1f, stiffness = if (far) 600f else 900f)
             launch { gx.animateTo(tx, spec) }
             gy.animateTo(ty, spec)
-            delay((if (quick) 500L else 900L) + rnd.nextLong(1600))
+            delay(450L + rnd.nextLong(1500))
         }
     }
     val inf = rememberInfiniteTransition(label = "eye")
@@ -91,15 +93,10 @@ fun LiveEye(size: Dp, look: Offset? = null, modifier: Modifier = Modifier) {
         val center = f[(ROWS / 2) * COLS + COLS / 2]
         if (center != null) {
             val fx = (gx.value + 1) / 2 * (COLS - 1); val fy = (gy.value + 1) / 2 * (ROWS - 1)
-            val c0 = floor(fx).toInt().coerceIn(0, COLS - 1); val r0 = floor(fy).toInt().coerceIn(0, ROWS - 1)
-            val c1 = (c0 + 1).coerceAtMost(COLS - 1); val r1 = (r0 + 1).coerceAtMost(ROWS - 1)
-            val ax = fx - c0; val ay = fy - r0
-            // ближайший кадр полностью, соседний по сильнейшей оси — с прозрачностью
+            val c0 = kotlin.math.round(fx).toInt().coerceIn(0, COLS - 1); val r0 = kotlin.math.round(fy).toInt().coerceIn(0, ROWS - 1)
             val main = f[r0 * COLS + c0] ?: center
             val dst = IntSize(eyeD.toInt(), eyeD.toInt()); val off = IntOffset((cx - eyeD / 2).toInt(), (cy - eyeD / 2).toInt())
-            drawImage(main, dstOffset = off, dstSize = dst)
-            if (ax >= ay && ax > .02f) f[r0 * COLS + c1]?.let { drawImage(it, dstOffset = off, dstSize = dst, alpha = ax) }
-            else if (ay > .02f) f[r1 * COLS + c0]?.let { drawImage(it, dstOffset = off, dstSize = dst, alpha = ay) }
+            drawImage(main, dstOffset = off, dstSize = dst, filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
         } else {
             drawCircle(Color(0xFFF3F1FF), eyeD / 2, Offset(cx, cy))
         }
