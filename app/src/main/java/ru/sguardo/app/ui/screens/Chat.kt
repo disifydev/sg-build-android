@@ -475,9 +475,9 @@ private fun MsgContext(m: Message, conv: Conversation, topY: Float, close: () ->
         add(Triple(if (isPinned) "Открепить" else "Закрепить", "pin") {
             close()
             // как в Telegram: в Telegram можно закрепить у обоих или только у себя
-            if (!isPinned && conv.network == "telegram") ov.confirm(DialogSpec("Закрепить сообщение?", "", buttons = listOf(
+            if (!isPinned && conv.network == "telegram") ov.confirm(DialogSpec("Закрепить сообщение?", "«У обоих» — закреп увидит и ${repo.nameOfConv(conv)} в Telegram.", buttons = listOf(
                 DialogBtn("Только у меня") { repo.pinMessage(conv.id, m.id, true, both = false) },
-                DialogBtn("У меня и у ${repo.nameOfConv(conv)}") { repo.pinMessage(conv.id, m.id, true, both = true) })))
+                DialogBtn("У обоих") { repo.pinMessage(conv.id, m.id, true, both = true) })))
             else repo.pinMessage(conv.id, m.id, !isPinned)
         })
         add(Triple("Переслать", "fwd") { close(); openForward(ov, repo, conv.id, listOf(m.id)) {} })
