@@ -280,19 +280,19 @@ private fun RecUi(r: RecState, onCancel: () -> Unit) {
         if (r.cancelled) Ic("trash", Color(0xFFD93A33), size = 16.dp)
         else Box(Modifier.size(10.dp).graphicsLayer { alpha = a }.background(Color(0xFFE5484D), CircleShape))
         Spacer(Modifier.width(10.dp))
-        T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f), modifier = Modifier.width(60.dp))
+        T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f), modifier = Modifier.width(54.dp))
         // живая волна громкости
-        Row(Modifier.width(54.dp).height(24.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-            val l = r.levels.takeLast(14)
-            repeat(14) { i ->
-                val v = l.getOrNull(i - (14 - l.size)) ?: 0f
-                Box(Modifier.width(2.dp).fillMaxHeight((.18f + v.coerceIn(0f, 1f) * .82f)).clip(RoundedCornerShape(1.dp)).background(Sg.c.primary.copy(alpha = .45f + i / 14f * .55f)))
+        Row(Modifier.width(38.dp).height(24.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            val l = r.levels.takeLast(10)
+            repeat(10) { i ->
+                val v = l.getOrNull(i - (10 - l.size)) ?: 0f
+                Box(Modifier.width(2.dp).fillMaxHeight((.18f + v.coerceIn(0f, 1f) * .82f)).clip(RoundedCornerShape(1.dp)).background(Sg.c.primary.copy(alpha = .45f + i / 10f * .55f)))
             }
         }
-        if (r.locked) T("Отмена", body(15f, FontWeight.SemiBold), Sg.c.primary, modifier = Modifier.weight(1f).padding(end = 40.dp).clickable(onClick = onCancel), align = androidx.compose.ui.text.style.TextAlign.Center)
-        else Row(Modifier.weight(1f).padding(end = 40.dp).offset { IntOffset((r.dx * .7f * density).roundToInt(), 0) }.graphicsLayer { alpha = (1 + r.dx / 140).coerceIn(0f, 1f) },
+        if (r.locked) T("Отмена", body(15f, FontWeight.SemiBold), Sg.c.primary, modifier = Modifier.weight(1f).padding(end = 24.dp).clickable(onClick = onCancel), align = androidx.compose.ui.text.style.TextAlign.Center)
+        else Row(Modifier.weight(1f).padding(start = 6.dp, end = 24.dp).offset { IntOffset((r.dx * .7f * density).roundToInt(), 0) }.graphicsLayer { alpha = (1 + r.dx / 140).coerceIn(0f, 1f) },
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Ic("chevL", Sg.c.muted, size = 16.dp, modifier = Modifier.offset(x = sh.dp)); T("Влево — отмена", body(14f), Sg.c.muted, maxLines = 1)
+            Ic("chevL", Sg.c.muted, size = 16.dp, modifier = Modifier.offset(x = sh.dp)); T("Влево — отмена", body(13.5f), Sg.c.muted, maxLines = 1)
         }
     }
 }
