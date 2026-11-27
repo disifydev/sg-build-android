@@ -210,9 +210,13 @@ fun ColumnScope.NewClientSheet() {
     // как «Новый контакт» в Telegram: крестик, название, галочка; аватар рядом с именем и фамилией; карточки с пояснениями
     ru.sguardo.app.ui.FormTop("Новый клиент", { ov.closeSheet() }, add)
     VGap(10.dp)
-    ru.sguardo.app.ui.FormCard {
+    ru.sguardo.app.ui.FormCard(bg = Sg.c.cHigh) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.padding(start = 14.dp, top = 12.dp, bottom = 12.dp)) { Avatar("$first $last".trim().ifBlank { "?" }, 64.dp, ring = Sg.c.cLow) }
+            Box(Modifier.padding(start = 14.dp, top = 12.dp, bottom = 12.dp), contentAlignment = Alignment.Center) {
+                val nm = "$first $last".trim()
+                if (nm.isEmpty()) Box(Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Sg.c.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Ic("user", Sg.c.primary, size = 28.dp) }
+                else Avatar(nm, 64.dp, ring = Sg.c.cHigh)
+            }
             Column(Modifier.weight(1f)) {
                 ru.sguardo.app.ui.FormField(first, { first = it }, "Имя", cap = androidx.compose.ui.text.input.KeyboardCapitalization.Words)
                 ru.sguardo.app.ui.FormField(last, { last = it }, "Фамилия", divider = true, cap = androidx.compose.ui.text.input.KeyboardCapitalization.Words)
@@ -220,7 +224,7 @@ fun ColumnScope.NewClientSheet() {
         }
     }
     VGap(16.dp)
-    ru.sguardo.app.ui.FormCard { ru.sguardo.app.ui.FormField(phone, { phone = it }, "Телефон", keyboard = KeyboardType.Phone) }
+    ru.sguardo.app.ui.FormCard(bg = Sg.c.cHigh) { ru.sguardo.app.ui.FormField(phone, { phone = it }, "Телефон", keyboard = KeyboardType.Phone) }
     ru.sguardo.app.ui.FormHint("Номер нужен для WhatsApp и MAX. Для Telegram и ВК можно без него.")
     Sect("Где общаетесь", top = 0.dp)
     FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -237,11 +241,11 @@ fun ColumnScope.NewClientSheet() {
         }
     }
     VGap(18.dp)
-    ru.sguardo.app.ui.FormCard {
+    ru.sguardo.app.ui.FormCard(bg = Sg.c.cHigh) {
         Gi("Сохранить в контактах телефона", onClick = { book = !book }) { SgSwitch(book) { book = it } }
     }
     VGap(16.dp)
-    ru.sguardo.app.ui.FormCard { ru.sguardo.app.ui.FormField(note, { note = it }, "Заметка (видна только вам)", singleLine = false) }
+    ru.sguardo.app.ui.FormCard(bg = Sg.c.cHigh) { ru.sguardo.app.ui.FormField(note, { note = it }, "Заметка (видна только вам)", singleLine = false) }
     VGap(8.dp)
 }
 

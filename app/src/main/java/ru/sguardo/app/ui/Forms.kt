@@ -42,8 +42,8 @@ fun FormTop(title: String, onClose: () -> Unit, onDone: (() -> Unit)?) {
 
 /** Карточка формы: скруглённая группа полей. */
 @Composable
-fun FormCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Sg.c.cLow), content = content)
+fun FormCard(modifier: Modifier = Modifier, bg: androidx.compose.ui.graphics.Color = Sg.c.cLow, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(bg), content = content)
 }
 
 /** Поле в карточке: без рамки, с тонкой чертой сверху, если это не первое поле. */
