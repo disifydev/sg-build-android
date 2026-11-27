@@ -63,4 +63,4 @@ fun FormField(value: String, onChange: (String) -> Unit, placeholder: String, di
 /** Пояснение под карточкой формы. */
 @Composable
 fun FormHint(text: String) = T(text, body(13f).copy(lineHeight = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp)), Sg.c.muted,
-    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp))
+    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp))

@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui
 
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,7 +47,8 @@ private const val WA = "M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.3A9.5 9.5 
 private const val TT = "M16.6 2h-3.3v13.4a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.2a6.3 6.3 0 1 0 5.3 6.2V8.7a7.6 7.6 0 0 0 4.4 1.4V6.8a4.4 4.4 0 0 1-4.4-4.4z"
 private const val TH = "M17 8.5C16 5.5 14 4 11.5 4 7.5 4 5 7 5 12s2.5 8 6.5 8c3 0 5.5-1.7 5.5-4.6 0-4.2-6.5-4.6-6.5-1.2 0 1.5 1.3 2.2 2.6 2.1 2-.1 3-1.8 3-4.6"
 private const val VK = "M12.9 17.5C6.9 17.5 3.4 13.4 3.3 6.5h3c.1 5 2.4 7.2 4.2 7.6V6.5h2.9v4.3c1.8-.2 3.6-2.2 4.3-4.3h2.8a8.3 8.3 0 0 1-3.8 5.4 8.6 8.6 0 0 1 4.5 5.6h-3.1a5.4 5.4 0 0 0-4.7-3.9v3.9z"
-private const val MX = "M5 17V7l7 7 7-7v10"
+// настоящий знак MAX (контур с favicon max.ru, тот же, что в кабинете), рамка -2..104
+private const val MX = "M50.76 .26C78.29 .26 99.89 22.6 99.89 50.15 99.89 77.7 77.61 99.49 51.02 99.49 41.59 99.49 37.01 98.16 29.65 92.95 29.14 92.59 28.45 92.68 28.02 93.14 22.36 99.18 7.85 103.43 7.19 95.18 7.19 80.79 0 71.45 0 49.88 0 21.55 23.22 .26 50.76 .26ZM51.53 24.81C38.46 24.13 28.26 33.2 26.01 47.38 24.15 59.13 27.45 73.45 30.28 74.18 31.48 74.48 34.36 72.28 36.46 70.3 36.85 69.93 37.45 69.86 37.91 70.15 41.18 72.15 44.88 73.65 48.96 73.86 62.37 74.56 74.26 64.06 74.96 50.65 75.66 37.23 64.94 25.5 51.53 24.8Z"
 
 private fun DrawScope.glyph(net: String) {
     val k = size.minDimension / 24f
@@ -58,7 +60,7 @@ private fun DrawScope.glyph(net: String) {
             "tiktok" -> drawPath(p(TT), w)
             "vk" -> drawPath(p(VK), w)
             "threads" -> drawPath(p(TH), w, style = Stroke(2.3f, cap = StrokeCap.Round))
-            "max" -> drawPath(p(MX), w, style = Stroke(2.6f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            "max" -> { val mk = 24f / 106f; scale(mk, mk, pivot = Offset.Zero) { translate(2f, 2f) { drawPath(p(MX).also { it.fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd }, w) } } }
             "instagram" -> {
                 drawRoundRect(w, topLeft = Offset(4f, 4f), size = androidx.compose.ui.geometry.Size(16f, 16f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(5f), style = Stroke(2.4f))
@@ -83,7 +85,7 @@ fun netBrush(net: String): Brush = when (net) {
     "tiktok", "threads" -> Brush.linearGradient(listOf(Color(0xFF111111), Color(0xFF111111)))
     "vk" -> Brush.linearGradient(listOf(Color(0xFF0077FF), Color(0xFF0077FF)))
     "avito" -> Brush.linearGradient(listOf(Color.White, Color.White))
-    "max" -> Brush.linearGradient(listOf(Color(0xFF3C8CFF), Color(0xFF7B3CF5)))
+    "max" -> Brush.linearGradient(0f to Color(0xFF44CCFF), .6f to Color(0xFF5B4DFF), 1f to Color(0xFF9B3BFF))
     "profi" -> Brush.linearGradient(listOf(Color(0xFFFF7A00), Color(0xFFFF7A00)))
     else -> Brush.linearGradient(listOf(Color.Gray, Color.Gray))
 }

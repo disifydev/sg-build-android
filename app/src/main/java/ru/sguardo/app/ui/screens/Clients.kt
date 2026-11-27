@@ -227,7 +227,7 @@ fun ColumnScope.NewClientSheet() {
     VGap(16.dp)
     ru.sguardo.app.ui.FormCard(bg = Sg.c.cHigh) { ru.sguardo.app.ui.FormField(phone, { phone = it }, "Телефон", keyboard = KeyboardType.Phone) }
     ru.sguardo.app.ui.FormHint("Номер нужен для WhatsApp и MAX. Для Telegram и ВК можно без него.")
-    Sect("Где общаетесь", top = 0.dp)
+    Sect("Где общаетесь", top = 6.dp)
     FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         listOf("telegram", "whatsapp", "instagram", "vk", "max", "avito").forEach { n -> FChip(Nets.name(n), net == n, leading = { NetDot(n, 16.dp) }) { net = n } }
     }
