@@ -74,6 +74,7 @@ fun ScheduleScreen() {
     val week = Fmt.weekStart(day)
     val lessons by repo.lessons.collectAsState()
     val loading by repo.lessonsLoading.collectAsState()
+    val blocked by repo.scheduleBlocked.collectAsState()
     val extras by repo.prefs.lessonExtra.collectAsState()
     val subjects by repo.prefs.subjects.collectAsState()
     LaunchedEffect(week) { repo.loadLessons(week) }
@@ -84,6 +85,10 @@ fun ScheduleScreen() {
             SubTopBar("Расписание", { nav.back() }, scrolled = scroll.value > 28)
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
                 VGap(8.dp)
+                if (blocked) Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp).clip(RoundedCornerShape(20.dp)).background(Sg.c.cLow).padding(16.dp)) {
+                    T("Расписание пока не включено", body(15.5f, FontWeight.SemiBold))
+                    T("Его включают кабинету в админке Sguardo. Занятия, созданные сейчас, не сохранятся.", body(13.5f), Sg.c.muted, modifier = Modifier.padding(top = 4.dp))
+                }
                 var drag by remember { mutableStateOf(0f) }
                 Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 14.dp).clip(RoundedCornerShape(20.dp)).background(Sg.c.cLow).padding(6.dp)
                     .pointerInput(Unit) { detectHorizontalDragGestures(onDragEnd = { if (drag < -80) day = day.plusWeeks(1) else if (drag > 80) day = day.minusWeeks(1); drag = 0f }) { _, dx -> drag += dx } },
@@ -161,11 +166,13 @@ fun ColumnScope.LessonSheet(l: Lesson) {
     }
 }
 
-/** Новое занятие или правка: ученик, время, длительность, предмет, повтор. */
+/** Новое занятие или правка: клиент, время (любое), длительность (любая), тип встречи (настраивается здесь же), повтор. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ColumnScope.LessonEditSheet(day: LocalDate, l: Lesson?, convId: String?) {
     val repo = LocalRepo.current; val ov = LocalOv.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val nav = ru.sguardo.app.ui.LocalNav.current
     val subjects by repo.prefs.subjects.collectAsState()
     val ex = l?.let { repo.prefs.lessonExtra.value[it.id] }
     val st0 = l?.let { Clock.local(parseIso(it.startsAt)) }
@@ -175,6 +182,8 @@ fun ColumnScope.LessonEditSheet(day: LocalDate, l: Lesson?, convId: String?) {
     var dur by remember { mutableStateOf(l?.let { "${(parseIso(it.endsAt) - parseIso(it.startsAt)) / 60_000} мин" } ?: "60 мин") }
     var subj by remember { mutableStateOf(ex?.subject?.ifBlank { null } ?: subjects.firstOrNull()?.name ?: "") }
     var rep by remember { mutableStateOf("Нет") }
+    var customDur by remember { mutableStateOf(false) }
+    var durText by remember { mutableStateOf(dur.filter { it.isDigit() }) }
     SheetTitle(if (l != null) "Изменить занятие" else "Новое занятие")
     Lbl(Fmt.dayLabel(day))
     Lbl("Клиент")
@@ -191,17 +200,32 @@ fun ColumnScope.LessonEditSheet(day: LocalDate, l: Lesson?, convId: String?) {
         }
     }
     Lbl("Время")
+    val presetsT = listOf("09:00", "10:00", "12:00", "14:00", "16:00", "17:00", "18:30", "19:30")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        (listOf("09:00", "10:00", "12:00", "14:00", "16:00", "17:00", "18:30", "19:30") + listOfNotNull(time.takeIf { it !in listOf("09:00", "10:00", "12:00", "14:00", "16:00", "17:00", "18:30", "19:30") }))
-            .forEach { t -> FChip(t, time == t) { time = t } }
+        (presetsT + listOfNotNull(time.takeIf { it !in presetsT })).forEach { t -> FChip(t, time == t) { time = t } }
+        // любое время: системные часы
+        FChip("Другое…", false, leading = { ru.sguardo.app.ui.Ic("clock", Sg.c.fg, size = 14.dp) }) {
+            val (h0, m0) = time.split(":").map { it.toIntOrNull() ?: 0 }
+            android.app.TimePickerDialog(ctx, { _, h, m -> time = "%02d:%02d".format(h, m) }, h0, m0, true).show()
+        }
     }
     Lbl("Длительность")
+    val presetsD = listOf("15 мин", "30 мин", "45 мин", "60 мин", "90 мин", "120 мин")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        listOf("30 мин", "45 мин", "60 мин", "90 мин").forEach { t -> FChip(t, dur == t) { dur = t } }
+        (presetsD + listOfNotNull(dur.takeIf { it !in presetsD && !customDur })).forEach { t -> FChip(t, dur == t && !customDur) { dur = t; customDur = false } }
+        FChip("Своя", customDur) { customDur = true; durText = dur.filter { it.isDigit() } }
     }
-    Lbl("Предмет")
+    if (customDur) {
+        VGap(8.dp)
+        SField(durText, { v -> durText = v.filter { it.isDigit() }.take(3); durText.toIntOrNull()?.takeIf { it in 5..600 }?.let { dur = "$it мин" } },
+            "Сколько минут, например 75", "clock", keyboard = androidx.compose.ui.text.input.KeyboardType.Number)
+    }
+    Lbl("Тип встречи")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         subjects.forEach { s -> FChip(s.name, subj == s.name, dot = hexColor(s.color)) { subj = s.name } }
+        // настройка типов прямо здесь: добавить новый или изменить список
+        FChip("Добавить", false, leading = { ru.sguardo.app.ui.Ic("plus", Sg.c.fg, size = 14.dp) }) { ov.openSheet { MeetingTypeSheet { name -> subj = name; ov.openSheet { LessonEditSheet(day, l, conv) } } } }
+        if (subjects.isNotEmpty()) FChip("Настроить", false, leading = { ru.sguardo.app.ui.Ic("sliders", Sg.c.fg, size = 14.dp) }) { ov.closeSheet(); nav.go("folders") }
     }
     if (l == null) {
         Lbl("Повторять")
@@ -213,12 +237,32 @@ fun ColumnScope.LessonEditSheet(day: LocalDate, l: Lesson?, convId: String?) {
     Btn("Сохранить", icon = "check", wide = true) {
         if (who.isBlank()) { repo.toast("Укажите клиента"); return@Btn }
         val (h, m) = time.split(":").map { it.toInt() }
-        val minutes = dur.filter { it.isDigit() }.toInt()
+        val minutes = dur.filter { it.isDigit() }.toIntOrNull()?.takeIf { it in 5..600 } ?: run { repo.toast("Укажите длительность от 5 до 600 минут"); return@Btn }
         val extra = LessonExtra(subj, if (conv == null) who.trim() else "")
         val c = conv ?: if (repo.demo.value) "" else null
         if (c == null) { repo.toast("Выберите клиента из списка: занятие привязывается к переписке"); return@Btn }
         ov.closeSheet()
         if (l != null) repo.moveLesson(l, day, h, m, minutes, extra, Fmt.weekStart(day))
         else repo.addLesson(c, day, h, m, minutes, extra, Fmt.weekStart(day), rep.filter { it.isDigit() }.toIntOrNull() ?: 0)
+    }
+}
+
+
+/** Новый тип встречи прямо из листа занятия: название и цвет в расписании. */
+@Composable
+fun ColumnScope.MeetingTypeSheet(onDone: (String) -> Unit) {
+    val repo = LocalRepo.current; val ov = LocalOv.current
+    var n by remember { mutableStateOf("") }
+    var col by remember { mutableStateOf(ru.sguardo.app.ui.PALF[0]) }
+    SheetTitle("Новый тип встречи")
+    Lbl("Название"); SField(n, { n = it }, "Например, Разбор, Консультация, Урок", "edit")
+    Lbl("Цвет в расписании"); Swatches(col) { col = it }
+    VGap(18.dp)
+    ru.sguardo.app.ui.Btn("Добавить", icon = "check", wide = true) {
+        val name = n.trim()
+        if (name.isEmpty()) { repo.toast("Введите название"); return@Btn }
+        val list = repo.prefs.subjects.value
+        if (list.none { it.name.equals(name, true) }) repo.prefs.setSubjects(list + ru.sguardo.app.data.Subject(name, col))
+        ov.closeSheet(); onDone(name)
     }
 }

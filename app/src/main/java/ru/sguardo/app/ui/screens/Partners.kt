@@ -70,7 +70,10 @@ fun PartnersScreen() {
                 l == null -> Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
                     androidx.compose.material3.CircularProgressIndicator(color = Sg.c.primary)
                 }
-                l.isEmpty() -> T("В клубе пока нет партнёров. Их привязывают в админке Sguardo.", body(15f), Sg.c.muted, modifier = Modifier.padding(top = 30.dp, start = 8.dp, end = 8.dp))
+                l.isEmpty() -> Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    T("Партнёров пока нет", body(16f, FontWeight.SemiBold)); Spacer(Modifier.height(6.dp))
+                    T("Их подключают в админке Sguardo", body(14f), Sg.c.muted)
+                }
                 else -> l.sortedByDescending { it.leads }.forEach { p ->
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Sg.c.cLow).padding(16.dp)) {
                         T(p.name, body(16.5f, FontWeight.SemiBold))
@@ -82,7 +85,7 @@ fun PartnersScreen() {
                     }
                 }
             }
-            FormHint("Партнёров привязывают в админке Sguardo. Здесь видны только цифры, без переписок.")
+            if (!l.isNullOrEmpty()) FormHint("Здесь видны только цифры, без переписок партнёров.")
         }
     }
 }

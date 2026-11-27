@@ -170,7 +170,7 @@ fun MoreScreen() {
             Gi("Функции для репетиторов", if (byAdmin && tutorPref == null) "Включены для вашего кабинета" else null, icon = "book",
                 onClick = { repo.prefs.setTutor(!tutor) }) { SgSwitch(tutor) { repo.prefs.setTutor(it) } }
         }
-        Hint("Классы, группы и предметы: фильтр «Все классы», класс в карточке ученика. Расписание доступно всем.")
+        Hint("Классы и группы: фильтр «Все классы», класс в карточке ученика. Расписание и типы встреч доступны всем.")
         Grp {
             Gi("Оформление", icon = "image", value = when (theme) { "light" -> "светлая"; "dark" -> "тёмная"; else -> null }, onClick = { nav.go("appearance") }) { Chev() }
         }
@@ -364,13 +364,21 @@ private fun ClassesSection() {
         }
     }
     Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) { Btn("Добавить группу", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet("group", null) } } }
-    Sect("Предметы")
+}
+
+/** Типы встреч для расписания (урок, разбор, консультация…): нужны всем, не только репетиторам. */
+@Composable
+private fun MeetingTypesSection() {
+    val repo = LocalRepo.current; val ov = LocalOv.current
+    val subjects by repo.prefs.subjects.collectAsState()
+    Sect("Типы встреч")
     Grp {
+        if (subjects.isEmpty()) Gi("Типов пока нет", "Например, «Консультация» или «Разбор»")
         subjects.forEach { s ->
             Gi(s.name, leading = { Box(Modifier.padding(horizontal = 5.dp).size(14.dp).background(hexColor(s.color), CircleShape)) }, onClick = { ov.openSheet { ListItemSheet("subject", s.name) } }) { Ic("edit", Sg.c.faint, size = 16.dp) }
         }
     }
-    Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 40.dp), contentAlignment = Alignment.Center) { Btn("Добавить предмет", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet("subject", null) } } }
+    Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 40.dp), contentAlignment = Alignment.Center) { Btn("Добавить тип встречи", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet("subject", null) } } }
 }
 
 @Composable
@@ -380,9 +388,9 @@ private fun ColumnScope.ListItemSheet(kind: String, cur: String?) {
     val isClass = kind == "class"; val isGroup = kind == "group"
     var n by remember { mutableStateOf(cur ?: "") }
     var col by remember { mutableStateOf(subjects.firstOrNull { it.name == cur }?.color ?: PALF[0]) }
-    val word = when (kind) { "class" -> "Класс"; "group" -> "Группа"; else -> "Предмет" }
-    SheetTitle(if (cur != null) word else when (kind) { "class" -> "Новый класс"; "group" -> "Новая группа"; else -> "Новый предмет" })
-    Lbl("Название"); SField(n, { n = it }, when (kind) { "class" -> "Например, 8 класс"; "group" -> "Например, Мини-группа ОГЭ"; else -> "Например, Английский" }, "edit")
+    val word = when (kind) { "class" -> "Класс"; "group" -> "Группа"; else -> "Тип встречи" }
+    SheetTitle(if (cur != null) word else when (kind) { "class" -> "Новый класс"; "group" -> "Новая группа"; else -> "Новый тип встречи" })
+    Lbl("Название"); SField(n, { n = it }, when (kind) { "class" -> "Например, 8 класс"; "group" -> "Например, Мини-группа ОГЭ"; else -> "Например, Консультация" }, "edit")
     if (kind == "subject") { Lbl("Цвет в расписании"); Swatches(col) { col = it } }
     VGap(18.dp)
     Btn(if (cur != null) "Сохранить" else "Добавить", icon = "check", wide = true) {
@@ -411,7 +419,7 @@ private fun ColumnScope.ListItemSheet(kind: String, cur: String?) {
         VGap(6.dp)
         Btn("Удалить", wide = true, kind = BtnKind.Text, danger = true) {
             ov.closeSheet()
-            ov.confirm(DialogSpec("Удалить «$cur»?", when (kind) { "class" -> "У учеников этого класса поле станет пустым."; "group" -> "Ученики останутся, только без этой группы."; else -> "Занятия по этому предмету останутся в расписании." },
+            ov.confirm(DialogSpec("Удалить «$cur»?", when (kind) { "class" -> "У учеников этого класса поле станет пустым."; "group" -> "Ученики останутся, только без этой группы."; else -> "Встречи этого типа останутся в расписании." },
                 buttons = listOf(DialogBtn("Удалить", danger = true) {
                     if (isClass || isGroup) {
                         if (isClass) repo.prefs.setExtraClasses(repo.prefs.extraClasses.value - cur) else repo.prefs.setExtraGroups(repo.prefs.extraGroups.value - cur)
@@ -491,7 +499,8 @@ fun FoldersScreen() {
                 }
             }
             Box(Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.Center) { Btn("Создать папку", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { FolderSheet(null) } } }
-            if (tutorF) ClassesSection() else Spacer(Modifier.height(40.dp))
+            if (tutorF) ClassesSection()
+            MeetingTypesSection()
         }
     }
 }

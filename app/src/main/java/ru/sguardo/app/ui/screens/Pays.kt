@@ -145,7 +145,7 @@ private fun SumCard(tint: Color, label: String, value: Long, money: Boolean, mod
 
 @Composable
 private fun PayRow(d: Deal, just: Boolean, onPaid: () -> Unit) {
-    val repo = LocalRepo.current
+    val repo = LocalRepo.current; val ov = ru.sguardo.app.ui.LocalOv.current
     val st by repo.state.collectAsState()
     val c = repo.contact(d.contactId)
     val prod = st.products.firstOrNull { it.id == d.productId }?.name ?: "Оплата"
@@ -153,7 +153,12 @@ private fun PayRow(d: Deal, just: Boolean, onPaid: () -> Unit) {
     val flash = remember { Animatable(if (just) 1f else 0f) }
     LaunchedEffect(just) { if (just) { flash.snapTo(1f); flash.animateTo(0f, tween(1200)) } }
     val tealC = Sg.c.teal
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Sg.c.cLow).background(tealC.copy(alpha = .22f * flash.value)).padding(horizontal = 14.dp, vertical = 10.dp),
+    // нажатие на оплату: удалить (ошибочную или тестовую)
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Sg.c.cLow).background(tealC.copy(alpha = .22f * flash.value))
+        .clickable {
+            ov.confirm(ru.sguardo.app.ui.DialogSpec("Удалить оплату?", "${repo.nameOf(c)} · ${Fmt.rub(d.amount)} · ${Fmt.dayMonth(parseIso(d.date))}. Вернуть будет нельзя.",
+                buttons = listOf(ru.sguardo.app.ui.DialogBtn("Удалить", danger = true) { repo.act(obj("type" to "removeDeal", "id" to d.id), "Оплата удалена") })))
+        }.padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Avatar(repo.nameOf(c), 40.dp, ring = Sg.c.cLow)
         Spacer(Modifier.width(12.dp))

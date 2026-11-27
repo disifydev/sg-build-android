@@ -58,6 +58,8 @@ class Repo private constructor(val ctx: Context) {
     val account = MutableStateFlow<AccountInfo?>(null)
     /** разделы из админки; null — ещё не загружены */
     val modules = MutableStateFlow<ModuleFlags?>(null)
+    /** сервер ответил 403 на расписание (модуль «Расписание» выключен в админке) */
+    val scheduleBlocked = MutableStateFlow(false)
     val online = MutableStateFlow(true)
     val history = MutableStateFlow<Map<String, List<Message>>>(emptyMap())
     val hasMore = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -567,7 +569,11 @@ class Repo private constructor(val ctx: Context) {
             lessonsLoading.value = true
             try {
                 lessons.value = api.get<LessonsResponse>("/api/schedule/", mapOf("from" to weekStart.toString(), "to" to weekStart.plusDays(7).toString())).lessons
-            } catch (e: Exception) { toast(friendly(e)) }
+                scheduleBlocked.value = false
+            } catch (e: Exception) {
+                // 403: расписание не включено кабинету в админке — не сыпем тостами, экран расписания объяснит сам
+                if (friendly(e) == "Нет доступа") scheduleBlocked.value = true else toast(friendly(e))
+            }
             lessonsLoading.value = false
         }
     }
