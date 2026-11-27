@@ -1,6 +1,9 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
@@ -226,6 +229,7 @@ fun Composer(
     onLater: () -> Unit,
     rec: MutableState<RecState?>,
     onRecDone: (RecState, Boolean) -> Unit,
+    editing: Boolean = false,
 ) {
     val repo = LocalRepo.current
     val perms = LocalPerms.current
@@ -253,10 +257,12 @@ fun Composer(
                 }
             }
         }
-        bar?.invoke()
         Box {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).heightIn(min = 52.dp).clip(RoundedCornerShape(28.dp)).background(Sg.c.cHigh)) {
+                Box(Modifier.weight(1f).heightIn(min = 52.dp).clip(RoundedCornerShape(if (bar != null) 22.dp else 28.dp)).background(Sg.c.cHigh).animateContentSize(spring(dampingRatio = .85f, stiffness = 500f))) {
+                    // ответ или правка — внутри поля, как в Telegram
+                    Column {
+                    if (bar != null) Box(Modifier.padding(start = 6.dp, end = 4.dp, top = 6.dp)) { bar() }
                     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         SmallBtn("clip", onAttach)
                         Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
@@ -266,6 +272,7 @@ fun Composer(
                         }
                         SmallBtn("bolt", onTplToggle, tint = if (showTpl) Sg.c.primary else Sg.c.muted)
                         SmallBtn("clock", onLater)
+                    }
                     }
                     rec.value?.let { r -> if (!r.circle) RecUi(r) { onRecDone(r, false) } }
                 }
@@ -307,7 +314,7 @@ fun Composer(
                             if (!r.locked && !r.cancelled) onRecDone(r, true)
                         }
                     }, contentAlignment = Alignment.Center) {
-                    AnimatedContent(if (has) "send" else if (circleMode) "vcirc" else "mic", transitionSpec = {
+                    AnimatedContent(if (has) (if (editing) "check" else "send") else if (circleMode) "vcirc" else "mic", transitionSpec = {
                         (scaleIn(spring(dampingRatio = .55f, stiffness = 500f)) + fadeIn()) togetherWith (scaleOut(tween(150)) + fadeOut(tween(150)))
                     }, label = "send") { k -> Ic(k, Sg.c.onPrimary) }
                 }

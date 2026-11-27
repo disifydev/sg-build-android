@@ -1,5 +1,7 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
@@ -104,7 +106,7 @@ private suspend fun toPrep(ctx: Context, l: List<GItem>): List<PrepItem> = withC
  * иначе круглые кнопки «Галерея», «Файл», «Оплата», «Шаблон».
  */
 @Composable
-fun ColumnScope.AttachSheet(convId: String, onTemplate: () -> Unit) {
+fun ColumnScope.AttachSheet(convId: String, onTemplate: () -> Unit, onText: (String) -> Unit = {}) {
     val repo = LocalRepo.current; val ov = LocalOv.current; val perms = LocalPerms.current; val ctx = LocalContext.current
     val demo = repo.demo.value
     var allowed by remember { mutableStateOf(demo || perms.hasGallery()) }
@@ -112,6 +114,7 @@ fun ColumnScope.AttachSheet(convId: String, onTemplate: () -> Unit) {
     var reload by remember { mutableIntStateOf(0) }
     val picked = remember { mutableStateListOf<GItem>() }
     var caption by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf("gallery") }
     LaunchedEffect(allowed, reload) {
         media = if (demo) GAL.indices.map { GItem(null, false, 0, it) } else if (allowed) withContext(Dispatchers.IO) { loadRecent(ctx) } else emptyList()
     }
@@ -122,8 +125,47 @@ fun ColumnScope.AttachSheet(convId: String, onTemplate: () -> Unit) {
             if (items.isEmpty()) repo.toast("Не получилось прочитать файл") else { ov.closeSheet(); openMediaPrep(ov, convId, items, caption = caption) }
         }
     }
-    SheetTitle(if (picked.isEmpty()) "Вложения" else "Выбрано: ${picked.size}")
-    LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxWidth().height(if (allowed && media.isEmpty() && !demo) 130.dp else 330.dp).clip(RoundedCornerShape(16.dp)),
+    // шапка как в Telegram: крестик слева, название по центру
+    Box(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(Sg.c.cHigh).clickable { ov.closeSheet() }, contentAlignment = Alignment.Center) { Ic("x", Sg.c.fg, size = 18.dp) }
+        AnimatedContent(when (tab) { "file" -> "Файл"; "tpl" -> "Шаблоны"; else -> if (picked.isEmpty()) "Недавние" else "Выбрано: ${picked.size}" }, Modifier.align(Alignment.Center), label = "ttl") { t ->
+            T(t, body(17f, FontWeight.SemiBold))
+        }
+    }
+    val pickFromPhone: (Boolean) -> Unit = { asFiles ->
+        perms.pickImages { uris -> if (uris.isNotEmpty()) { ov.closeSheet(); repo.scope.launch {
+            val items = withContext(Dispatchers.IO) { prepFromUris(ctx, uris) }
+            if (items.isEmpty()) repo.toast("Не получилось прочитать файл") else openMediaPrep(ov, convId, items, files = asFiles)
+        } } }
+    }
+    val pickDocs: () -> Unit = {
+        if (demo) { ov.closeSheet(); openMediaPrep(ov, convId, listOf(PrepItem(null, "Счёт_27_ноября.pdf", "application/pdf")), files = true) }
+        else perms.pickFiles { uris -> if (uris.isNotEmpty()) { ov.closeSheet(); repo.scope.launch {
+            val items = withContext(Dispatchers.IO) { prepFromUris(ctx, uris) }
+            if (items.isEmpty()) repo.toast("Не получилось прочитать файл") else openMediaPrep(ov, convId, items, files = true)
+        } } }
+    }
+    if (tab == "file") Column(Modifier.fillMaxWidth().height(330.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Sg.c.cHigh)) {
+            FileRow("image", "Выбрать из галереи", "фото и видео без сжатия") { if (demo) repo.toast("В демо галерея не открывается") else pickFromPhone(true) }
+            androidx.compose.material3.HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(start = 56.dp))
+            FileRow("file", "Выбрать из файлов", "документы, PDF, таблицы") { pickDocs() }
+            androidx.compose.material3.HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(start = 56.dp))
+            FileRow("camera", "Сфотографировать документ", "снимок уйдёт файлом") {
+                if (demo) repo.toast("В демо камера не открывается")
+                else perms.takePhoto { f -> if (f != null) { ov.closeSheet(); openMediaPrep(ov, convId, listOf(PrepItem(f, f.name, "image/jpeg")), files = true) } }
+            }
+        }
+    } else if (tab == "tpl") Column(Modifier.fillMaxWidth().height(330.dp).clip(RoundedCornerShape(18.dp)).background(Sg.c.cHigh).verticalScroll(rememberScrollState())) {
+        val tpls = repo.state.value.templates
+        if (tpls.isEmpty()) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { T("Шаблонов пока нет: их добавляют в кабинете на сайте", body(14f), Sg.c.muted, align = androidx.compose.ui.text.style.TextAlign.Center) }
+        tpls.forEachIndexed { i, t ->
+            if (i > 0) androidx.compose.material3.HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(start = 16.dp))
+            Column(Modifier.fillMaxWidth().clickable { ov.closeSheet(); onText(t.text) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                T(t.text, body(15f), maxLines = 3)
+            }
+        }
+    } else LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxWidth().height(if (allowed && media.isEmpty() && !demo) 130.dp else 330.dp).clip(RoundedCornerShape(16.dp)),
         horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         item(key = "cam") {
             Box(Modifier.aspectRatio(1f).background(Color(0xFF1C2524)).clickable {
@@ -185,27 +227,38 @@ fun ColumnScope.AttachSheet(convId: String, onTemplate: () -> Unit) {
                     T(picked.size.toString(), body(11f, FontWeight.Bold), Sg.c.onTeal)
                 }
             }
-        } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            AttachBtn("image", "Галерея", Color(0xFF3E8BE8)) {
-                if (demo) { openPrep(emptyList(), media.firstOrNull()); return@AttachBtn }
-                perms.pickImages { uris -> if (uris.isNotEmpty()) { ov.closeSheet(); repo.scope.launch {
-                    val items = withContext(Dispatchers.IO) { prepFromUris(ctx, uris) }
-                    if (items.isEmpty()) repo.toast("Не получилось прочитать файл") else openMediaPrep(ov, convId, items)
-                } } }
+        } else AttachTabs(tab) { k ->
+            when (k) {
+                "pay" -> { val c = repo.conv(convId); if (c == null) repo.toast("Чат не найден") else ov.openSheet { PaySheet(c.contactId, "paid", title = "Записать оплату", lockClient = true) } }
+                else -> { tab = k }
             }
-            AttachBtn("file", "Файл", Color(0xFF1FA39A)) {
-                if (demo) { ov.closeSheet(); openMediaPrep(ov, convId, listOf(PrepItem(null, "Счёт_27_ноября.pdf", "application/pdf")), files = true); return@AttachBtn }
-                perms.pickFiles { uris -> if (uris.isNotEmpty()) { ov.closeSheet(); repo.scope.launch {
-                    val items = withContext(Dispatchers.IO) { prepFromUris(ctx, uris) }
-                    if (items.isEmpty()) repo.toast("Не получилось прочитать файл") else openMediaPrep(ov, convId, items, files = true)
-                } } }
-            }
-            AttachBtn("card", "Оплата", Color(0xFF3FA45B)) {
-                val c = repo.conv(convId)
-                if (c == null) repo.toast("Чат не найден") else ov.openSheet { PaySheet(c.contactId, "paid", title = "Записать оплату", lockClient = true) }
-            }
-            AttachBtn("bolt", "Шаблон", Color(0xFFE79A2E)) { ov.closeSheet(); onTemplate() }
         }
     }
     Spacer(Modifier.height(6.dp))
+}
+
+@Composable
+private fun FileRow(icon: String, title: String, sub: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Ic(icon, Sg.c.primary, size = 22.dp); Spacer(Modifier.width(18.dp))
+        Column { T(title, body(15.5f), Sg.c.primary); T(sub, body(12.5f), Sg.c.muted) }
+    }
+}
+
+/** Нижняя «таблетка» вкладок, как в Telegram: выбранная подсвечена. */
+@Composable
+private fun AttachTabs(cur: String, onPick: (String) -> Unit) {
+    val tabs = listOf(Triple("gallery", "image", "Галерея"), Triple("file", "file", "Файл"), Triple("pay", "card", "Оплата"), Triple("tpl", "bolt", "Шаблон"))
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(Sg.c.cHigh).padding(5.dp)) {
+        tabs.forEach { (k, ic, t) ->
+            val on = k == cur
+            val a by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = .8f, stiffness = 500f), label = "tab")
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(25.dp)).background(Sg.c.primary.copy(alpha = .16f * a)).clickable { onPick(k) }.padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Ic(ic, if (on) Sg.c.primary else Sg.c.fg, size = 22.dp)
+                Spacer(Modifier.height(3.dp))
+                T(t, body(12f, FontWeight.Medium), if (on) Sg.c.primary else Sg.c.fg)
+            }
+        }
+    }
 }

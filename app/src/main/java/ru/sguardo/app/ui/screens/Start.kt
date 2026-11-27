@@ -1,5 +1,8 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -178,36 +181,74 @@ fun LoginScreen() {
     var mode by remember { mutableStateOf("password") }
     var busy by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().background(Sg.c.surface).windowInsetsPadding(WindowInsets.safeDrawing).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        VGap(56.dp)
-        EyeLogo(96.dp, Modifier.shadowCompat(14.dp, CircleShape))
-        VGap(22.dp)
-        T("Вход в Sguardo", disp(25, FontWeight.Bold))
-        VGap(8.dp)
-        T(if (mode == "code") "Пришлём код на почту, пароль не нужен" else "Тот же кабинет, что на сайте sguardo.ru", body(15f), Sg.c.muted)
-        VGap(28.dp)
-        SField(email, { email = it; err = null }, "Почта", "mail", height = 56.dp, keyboard = KeyboardType.Email)
-        VGap(12.dp)
-        when (mode) {
-            "password" -> SField(pass, { pass = it; err = null }, "Пароль", "lock", height = 56.dp, keyboard = KeyboardType.Password, password = true)
-            "codeSent" -> SField(code, { code = it.filter { c -> c.isDigit() }.take(8); err = null }, "Код из письма", "shield", height = 56.dp, keyboard = KeyboardType.Number)
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "bg")
+    val drift by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(9000, easing = androidx.compose.animation.core.LinearEasing), RepeatMode.Reverse), label = "d")
+    val glow by inf.animateFloat(.85f, 1.08f, androidx.compose.animation.core.infiniteRepeatable(tween(2600), RepeatMode.Reverse), label = "g")
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(700, easing = EaseM3)) }
+    val teal = Sg.c.teal; val prim = Sg.c.primary
+    Box(Modifier.fillMaxSize().background(Sg.c.surface)) {
+        // живой фон: обои чата и два мягких пятна света
+        ChatWallpaper(Modifier.fillMaxSize())
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val w = size.width; val h = size.height
+            drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(teal.copy(alpha = .35f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(w * (.2f + .3f * drift), h * .2f), radius = w * .8f), w * .8f, androidx.compose.ui.geometry.Offset(w * (.2f + .3f * drift), h * .2f))
+            drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(prim.copy(alpha = .22f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(w * (.9f - .3f * drift), h * .42f), radius = w * .7f), w * .7f, androidx.compose.ui.geometry.Offset(w * (.9f - .3f * drift), h * .42f))
         }
-        if (err != null) T(err!!, body(13.5f, FontWeight.Medium), Sg.c.danger, modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 6.dp))
-        VGap(20.dp)
-        Btn(when (mode) { "password" -> "Войти"; "code" -> "Прислать код"; else -> "Войти" }, wide = true, enabled = !busy && email.contains("@")) {
-            busy = true
-            scope.launch {
-                err = when (mode) {
-                    "password" -> repo.login(email, pass)
-                    "code" -> repo.requestCode(email).also { if (it == null) mode = "codeSent" }
-                    else -> repo.verifyCode(email, code)
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // верх: логотип со свечением
+            Column(Modifier.weight(1f).fillMaxWidth().graphicsLayer { alpha = appear.value; translationY = (1 - appear.value) * 30.dp.toPx() },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Box(contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(150.dp).graphicsLayer { scaleX = glow; scaleY = glow }.background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(teal.copy(alpha = .45f), Color.Transparent)), CircleShape))
+                    EyeLogo(104.dp, Modifier.shadowCompat(16.dp, CircleShape))
                 }
-                busy = false
+                VGap(18.dp)
+                T("Sguardo", disp(32, FontWeight.Bold))
+                VGap(6.dp)
+                T("Все переписки с учениками в одном месте", body(15f), Sg.c.muted, modifier = Modifier.padding(horizontal = 32.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+            // низ: карточка входа
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp).graphicsLayer { alpha = appear.value; translationY = (1 - appear.value) * 60.dp.toPx() }
+                .shadowCompat(18.dp, RoundedCornerShape(30.dp)).clip(RoundedCornerShape(30.dp)).background(Sg.c.c).padding(horizontal = 18.dp, vertical = 18.dp)) {
+                // переключатель способа входа
+                val byCode = mode != "password"
+                Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(22.dp)).background(Sg.c.cHigh).padding(4.dp)) {
+                    listOf(false to "Пароль", true to "Код из письма").forEach { (c, t) ->
+                        val on = c == byCode
+                        val a by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = .8f, stiffness = 500f), label = "seg")
+                        Box(Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(18.dp)).background(Sg.c.c.copy(alpha = a)).clickable {
+                            if (c != byCode) { mode = if (c) "code" else "password"; err = null }
+                        }, contentAlignment = Alignment.Center) { T(t, body(14f, FontWeight.SemiBold), if (on) Sg.c.fg else Sg.c.muted) }
+                    }
+                }
+                VGap(14.dp)
+                SField(email, { email = it; err = null }, "Почта", "mail", height = 54.dp, keyboard = KeyboardType.Email)
+                AnimatedContent(mode, transitionSpec = { (fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 10 }) togetherWith fadeOut(tween(120)) }, label = "m") { m ->
+                    Column {
+                        when (m) {
+                            "password" -> { VGap(10.dp); SField(pass, { pass = it; err = null }, "Пароль", "lock", height = 54.dp, keyboard = KeyboardType.Password, password = true) }
+                            "codeSent" -> { VGap(10.dp); SField(code, { code = it.filter { c -> c.isDigit() }.take(8); err = null }, "Код из письма", "shield", height = 54.dp, keyboard = KeyboardType.Number) }
+                            else -> { VGap(10.dp); T("Пришлём код на почту, пароль не нужен", body(13.5f), Sg.c.muted, modifier = Modifier.padding(start = 6.dp)) }
+                        }
+                    }
+                }
+                if (err != null) T(err!!, body(13.5f, FontWeight.Medium), Sg.c.danger, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 6.dp))
+                VGap(16.dp)
+                Btn(when (mode) { "password" -> "Войти"; "code" -> "Прислать код"; else -> "Войти" }, wide = true, enabled = !busy && email.contains("@")) {
+                    busy = true
+                    scope.launch {
+                        err = when (mode) {
+                            "password" -> repo.login(email, pass)
+                            "code" -> repo.requestCode(email).also { if (it == null) mode = "codeSent" }
+                            else -> repo.verifyCode(email, code)
+                        }
+                        busy = false
+                    }
+                }
+                VGap(10.dp)
+                T("Нет кабинета? Зарегистрируйтесь на sguardo.ru", body(13f), Sg.c.muted, modifier = Modifier.fillMaxWidth(), align = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
-        VGap(6.dp)
-        Btn(if (mode == "password") "Войти по коду из письма" else "Войти с паролем", wide = true, kind = BtnKind.Text) { mode = if (mode == "password") "code" else "password"; err = null }
-        VGap(24.dp)
     }
 }

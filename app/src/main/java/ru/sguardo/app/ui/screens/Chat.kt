@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.mutableStateListOf
 import android.app.DatePickerDialog
@@ -235,7 +236,8 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     androidx.compose.runtime.CompositionLocalProvider(LocalPlayer provides hub) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .25f * k))) {
         Column(Modifier.fillMaxSize().graphicsLayer { translationX = k * 22 * density.density; scaleX = 1 - .1f * k; scaleY = 1 - .1f * k }
-            .clip(RoundedCornerShape((k * 30).dp)).background(Sg.c.surface).imePadding()) {
+            .clip(RoundedCornerShape((k * 30).dp)).background(Sg.c.surface).imePadding()
+            .then(if (hidden != null && android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(14.dp) else Modifier)) {
             // шапка
             Row(Modifier.fillMaxWidth().background(Sg.c.c).windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (sel != null) {
@@ -331,9 +333,9 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
                 Composer(id, text,
                     bar = barC,
                     showTpl = tpl, onTplToggle = { tpl = !tpl }, onSend = doSend,
-                    onAttach = { openAttach(ov, repo, perms, ctx, id) { tpl = true } },
+                    onAttach = { openAttach(ov, repo, perms, ctx, id, onText = { t -> text.value = t; repo.saveDraft(id, t) }) { tpl = true } },
                     onLater = { if (text.value.isBlank()) repo.toast("Сначала напишите сообщение") else openLater(ov, repo, ctx, id, text.value.trim(), reply) { text.value = ""; repo.saveDraft(id, ""); reply = null } },
-                    rec = rec, onRecDone = finishRec)
+                    rec = rec, onRecDone = finishRec, editing = isEdit)
             }
         }
         rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, FAKE_DEVICES, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null },
@@ -347,7 +349,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
 @Composable
 fun CBar(kind: String, title: String, text: String, onClose: () -> Unit) {
     val teal = Sg.c.teal
-    Row(Modifier.fillMaxWidth().background(Sg.c.cHigh, RoundedCornerShape(16.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 0.dp, top = 2.dp, bottom = 0.dp), verticalAlignment = Alignment.CenterVertically) {
         Ic(if (kind == "edit") "edit" else "reply", teal, size = 16.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).drawBehind { drawRect(teal, size = Size(3.dp.toPx(), size.height)) }.padding(start = 11.dp)) {
@@ -479,7 +481,7 @@ private fun MsgContext(m: Message, conv: Conversation, topY: Float, close: () ->
     val rxH = with(density) { 60.dp.toPx() }
     val want = topY - rxH
     val y = want.coerceAtMost(screenH - menuH - rxH - with(density) { 220.dp.toPx() }).coerceAtLeast(with(density) { 70.dp.toPx() })
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .32f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close)) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) .38f else .55f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close)) {
         Column(Modifier.fillMaxWidth().offset { IntOffset(0, y.roundToInt()) }.padding(horizontal = 12.dp),
             horizontalAlignment = if (m.isOut) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (reacts) Row(Modifier.shadowCompat(4.dp, RoundedCornerShape(30.dp)).clip(RoundedCornerShape(30.dp)).background(Sg.c.cHigh).padding(horizontal = 6.dp, vertical = 5.dp)) {
@@ -498,12 +500,16 @@ private fun MsgContext(m: Message, conv: Conversation, topY: Float, close: () ->
             LaunchedEffect(Unit) { ms.animateTo(1f, spring(dampingRatio = .6f, stiffness = 400f)) }
             Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).widthIn(min = 236.dp).graphicsLayer { scaleX = ms.value; scaleY = ms.value; alpha = ((ms.value - .5f) * 2).coerceIn(0f, 1f)
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (m.isOut) 1f else 0f, 0f) }
-                .shadowCompat(6.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Sg.c.c).padding(vertical = 8.dp)) {
+                .shadowCompat(10.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(Sg.c.cHigh).padding(vertical = 6.dp)) {
                 if (m.isOut && !m.pending) Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Ic("checks", Sg.c.muted, size = 13.dp); Spacer(Modifier.width(6.dp))
                     T("Отправлено ${if (Clock.local(m.time).toLocalDate() == Clock.today()) "сегодня" else Fmt.dayMonth(m.time)} в ${Fmt.hm(m.time)}", body(12.5f), Sg.c.muted)
                 }
-                items.forEach { (t, ic, fn) -> PvItem(t, ic, danger = ic == "trash", onClick = fn) }
+                items.forEach { (t, ic, fn) ->
+                    // «Выбрать» отдельно, под чертой, как в Telegram
+                    if (ic == "selc") androidx.compose.material3.HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    PvItem(t, ic, danger = ic == "trash", onClick = fn)
+                }
             }
         }
     }
@@ -593,8 +599,8 @@ fun openScheduledList(ov: Overlays, repo: Repo, convId: String) {
 }
 
 /** Вложения как в Telegram: сетка последних фото с камерой и выбором нескольких, внизу круглые кнопки. */
-fun openAttach(ov: Overlays, repo: Repo, perms: ru.sguardo.app.ui.Permissions, ctx: Context, convId: String, onTemplate: () -> Unit) {
-    ov.openSheet { AttachSheet(convId, onTemplate) }
+fun openAttach(ov: Overlays, repo: Repo, perms: ru.sguardo.app.ui.Permissions, ctx: Context, convId: String, onText: (String) -> Unit = {}, onTemplate: () -> Unit) {
+    ov.openSheet { AttachSheet(convId, onTemplate, onText) }
 }
 
 @Composable
