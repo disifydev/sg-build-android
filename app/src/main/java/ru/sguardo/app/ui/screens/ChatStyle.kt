@@ -53,14 +53,14 @@ data class ChatStyle(val out: Color?, val outFg: Color?, val radius: Dp, val tex
 val LocalChatStyle = compositionLocalOf { ChatStyle(null, null, 18.dp, 1f, true) }
 
 /** Цветовые темы, как лента тем в Telegram: обои + цвет своих сообщений (светлая и тёмная). */
-data class ChatTheme(val key: String, val name: String, val emoji: String, val wall: String, val light: Pair<Long, Long>?, val dark: Pair<Long, Long>?)
+data class ChatTheme(val key: String, val name: String, val icon: String, val wall: String, val light: Pair<Long, Long>?, val dark: Pair<Long, Long>?)
 val CHAT_THEMES = listOf(
-    ChatTheme("classic", "Классика", "📒", "school", null, null),
-    ChatTheme("lilac", "Сирень", "💜", "lilac", 0xFFC2B2F7 to 0xFF1D1340, 0xFF6E58C9 to 0xFFFFFFFF),
-    ChatTheme("mint", "Мята", "🌿", "mint", 0xFFAEE3CB to 0xFF0F2A20, 0xFF2F7A5E to 0xFFFFFFFF),
-    ChatTheme("peach", "Персик", "🍑", "peach", 0xFFF8C7AD to 0xFF3A1D10, 0xFFB8643E to 0xFFFFFFFF),
-    ChatTheme("sky", "Небо", "☁️", "sky", 0xFFB0D4F6 to 0xFF0F2238, 0xFF3D6FA8 to 0xFFFFFFFF),
-    ChatTheme("night", "Ночь", "🌙", "night", 0xFF8F7CF0 to 0xFFFFFFFF, 0xFF6A58D6 to 0xFFFFFFFF),
+    ChatTheme("classic", "Классика", "book", "school", null, null),
+    ChatTheme("lilac", "Сирень", "heart", "lilac", 0xFFC2B2F7 to 0xFF1D1340, 0xFF6E58C9 to 0xFFFFFFFF),
+    ChatTheme("mint", "Мята", "leaf", "mint", 0xFFAEE3CB to 0xFF0F2A20, 0xFF2F7A5E to 0xFFFFFFFF),
+    ChatTheme("peach", "Персик", "sun", "peach", 0xFFF8C7AD to 0xFF3A1D10, 0xFFB8643E to 0xFFFFFFFF),
+    ChatTheme("sky", "Небо", "cloud", "sky", 0xFFB0D4F6 to 0xFF0F2238, 0xFF3D6FA8 to 0xFFFFFFFF),
+    ChatTheme("night", "Ночь", "moon", "night", 0xFF8F7CF0 to 0xFFFFFFFF, 0xFF6A58D6 to 0xFFFFFFFF),
 )
 
 @Composable
@@ -114,7 +114,13 @@ fun AppearanceScreen() {
                                 Spacer(Modifier.height(6.dp))
                                 Box(Modifier.align(Alignment.Start).size(46.dp, 18.dp).clip(RoundedCornerShape(9.dp)).background(Sg.c.cHigh))
                                 Spacer(Modifier.weight(1f))
-                                T(t.emoji, body(22f))
+                                // значок темы вместо эмодзи: белый кружок и иконка цвета темы
+                                val accent = pair?.let { Color(it.first) } ?: Sg.c.primary
+                                Box(Modifier.size(34.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.White.copy(alpha = if (Sg.c.dark) .14f else .85f)), contentAlignment = Alignment.Center) {
+                                    ru.sguardo.app.ui.Ic(t.icon, if (Sg.c.dark) Color.White else androidx.compose.ui.graphics.lerp(accent, Color.Black, .35f), size = 18.dp)
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                T(t.name, body(11.5f, FontWeight.Medium), if (t.key == "night") Color.White.copy(alpha = .9f) else Sg.c.fg.copy(alpha = .8f))
                             }
                         }
                     }
