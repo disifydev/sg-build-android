@@ -1,5 +1,9 @@
 package ru.sguardo.app.ui.screens
 
+import ru.sguardo.app.ui.GROUP_P
+import ru.sguardo.app.ui.klsTitle
+import ru.sguardo.app.ui.inKls
+import ru.sguardo.app.ui.allGroups
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,6 +107,7 @@ fun ClientsScreen() {
     LaunchedEffect(ui.scrollTopSignal) { if (ui.scrollTopSignal > 0) scroll.animateScrollTo(0) }
     val all = ui.cs == "all"
     val classes = remember(st, extra) { allClasses(repo, st) }
+    val groups = remember(st, extra) { allGroups(repo, st) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             TopBar("Клиенты", scroll.value > 28) {
@@ -119,6 +124,7 @@ fun ClientsScreen() {
                 HScroll(Modifier.padding(top = 10.dp, bottom = 2.dp)) {
                     Chip("Все классы", on = ui.kls == "all", check = true) { ui.kls = "all" }
                     classes.forEach { k -> Chip(k, on = ui.kls == k, check = true) { ui.kls = k } }
+                    groups.forEach { g -> Chip(g, on = ui.kls == GROUP_P + g, check = true) { ui.kls = GROUP_P + g } }
                     Chip("Настроить", leading = { Ic("sliders", Sg.c.fg, size = 16.dp) }) { nav.go("lists") }
                 }
                 VGap(10.dp)
@@ -127,9 +133,9 @@ fun ClientsScreen() {
                     load == Load.Error && st.contacts.isEmpty() -> ErrorState({ repo.retry() })
                     st.contacts.isEmpty() -> EmptyState("users", "Клиентов пока нет", "Они появятся, когда вам напишут, или добавьте клиента сами", button = "Добавить клиента") { ov.openSheet { NewClientSheet() } }
                     else -> {
-                        val list = st.contacts.filter { (all || it.folderId == ui.cs) && (ui.kls == "all" || ui.kls in it.classes()) }
+                        val list = st.contacts.filter { (all || it.folderId == ui.cs) && it.inKls(ui.kls) }
                             .sortedByDescending { contactTime(st, it) }
-                        if (list.isEmpty()) EmptyState("users", "Здесь пока никого", if (ui.kls == "all") "В этой папке пока нет клиентов" else "Нет учеников с классом «${ui.kls}»")
+                        if (list.isEmpty()) EmptyState("users", "Здесь пока никого", if (ui.kls == "all") "В этой папке пока нет клиентов" else "Нет учеников в «${klsTitle(ui.kls)}»")
                         else Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             list.forEach { c -> ClientCard(c, all) }
                         }

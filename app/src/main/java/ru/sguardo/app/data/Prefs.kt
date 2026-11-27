@@ -28,6 +28,7 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     val notifyMessages = MutableStateFlow(sp.getBoolean("n1", true))
     val notifyReminders = MutableStateFlow(sp.getBoolean("n2", true))
     val extraClasses = MutableStateFlow(sp.getStringSet("classes", emptySet())!!.toList().sorted())
+    val extraGroups = MutableStateFlow(sp.getStringSet("groups", emptySet())!!.toList().sorted())
     val subjects = MutableStateFlow(
         sp.getString("subjects", null)?.let { runCatching { JsonCfg.decodeFromString(ListSerializer(Subject.serializer()), it) }.getOrNull() }
             ?: listOf(Subject("Математика", "#86C7A6"), Subject("Физика", "#9CC3D3"), Subject("Пробное занятие", "#E2C06A"), Subject("Консультация", "#E9A37E"))
@@ -46,6 +47,7 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     fun setNotifyMessages(v: Boolean) { notifyMessages.value = v; sp.edit().putBoolean("n1", v).apply() }
     fun setNotifyReminders(v: Boolean) { notifyReminders.value = v; sp.edit().putBoolean("n2", v).apply() }
     fun setExtraClasses(v: List<String>) { extraClasses.value = v; sp.edit().putStringSet("classes", v.toSet()).apply() }
+    fun setExtraGroups(v: List<String>) { extraGroups.value = v; sp.edit().putStringSet("groups", v.toSet()).apply() }
     fun setSubjects(v: List<Subject>) { subjects.value = v; sp.edit().putString("subjects", JsonCfg.encodeToString(ListSerializer(Subject.serializer()), v)).apply() }
     fun setLessonExtra(id: String, e: LessonExtra?) {
         val m = lessonExtra.value.toMutableMap(); if (e == null) m.remove(id) else m[id] = e
@@ -58,7 +60,7 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     }
     fun clearAccountData() {
         sp.edit().remove("lessonExtra").remove("readNotifs").remove("classes").remove("fcm").apply()
-        lessonExtra.value = emptyMap(); readNotifs.value = emptySet(); extraClasses.value = emptyList()
+        lessonExtra.value = emptyMap(); readNotifs.value = emptySet(); extraClasses.value = emptyList(); extraGroups.value = emptyList()
     }
 }
 

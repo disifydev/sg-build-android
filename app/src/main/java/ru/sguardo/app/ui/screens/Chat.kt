@@ -166,7 +166,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     // запись голосового
     LaunchedEffect(rec.value) {
         val r = rec.value ?: return@LaunchedEffect
-        if (!r.circle && !repo.demo.value) {
+        if (!r.circle && !FAKE_DEVICES) {
             val why = voice.start()
             if (why != null) { repo.toast("Запись не началась: $why"); rec.value = null; return@LaunchedEffect }
             while (rec.value === r) { r.level = voice.level(); r.levels.add(r.level); if (r.levels.size > 40) r.levels.removeAt(0); kotlinx.coroutines.delay(90) }
@@ -178,7 +178,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     val finishRec: (RecState, Boolean) -> Unit = { r, send ->
         rec.value = null
         val secs = (System.currentTimeMillis() - r.started) / 1000f
-        if (repo.demo.value) {
+        if (FAKE_DEVICES) {
             if (send && secs >= .7f) repo.sendFile(id, File(""), if (r.circle) "circle.mp4" else "voice.m4a", "", if (r.circle) "video" else "audio", r.circle, secs.roundToInt().coerceAtLeast(1))
             else if (send) repo.toast(if (r.circle) "Удерживайте, чтобы записать кружок" else "Удерживайте, чтобы записать голосовое")
         } else if (r.circle) {
@@ -323,7 +323,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
                     rec = rec, onRecDone = finishRec)
             }
         }
-        rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, repo.demo.value, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null }) }
+        rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, FAKE_DEVICES, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null }) }
     }
     }
 }

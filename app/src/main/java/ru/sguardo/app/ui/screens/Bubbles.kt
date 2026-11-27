@@ -265,8 +265,8 @@ fun VoiceRow(m: Message, out: Boolean, fg: Color) {
         Box(Modifier.size(38.dp).clip(CircleShape).background(if (out) Sg.c.onPc else Sg.c.teal).clickable {
             if (playing) { playing = false; player.value?.pause(); hub.release(m.id); return@clickable }
             hub.claim(m.id)
-            val url = repo.api.media(m.att?.url)
-            if (url != null && !repo.demo.value) {
+            val url = imageUrl(repo, m.att)
+            if (url != null && (!repo.demo.value || url.startsWith("file:"))) {
                 if (player.value == null) {
                     val mp = MediaPlayer()
                     try {
@@ -307,7 +307,7 @@ fun CircleMsg(m: Message, compact: Boolean) {
     val scope = rememberCoroutineScope()
     val size by animateDpAsState(if (compact) 140.dp else if (started) 244.dp else 200.dp, spring(dampingRatio = .7f, stiffness = 500f), label = "cv")
     val url = imageUrl(repo, m.att)
-    val real = url != null && !repo.demo.value
+    val real = url != null && (!repo.demo.value || url.startsWith("file:"))
     fun stop() { playing = false; started = false; video.value?.pause(); hub.release(m.id); scope.launch { prog.snapTo(0f) } }
     LaunchedEffect(hub.current) { if (hub.current != m.id && started) { playing = false; started = false; video.value?.pause(); prog.snapTo(0f) } }
     LaunchedEffect(playing) {

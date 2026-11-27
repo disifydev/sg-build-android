@@ -1,5 +1,10 @@
 package ru.sguardo.app.ui.screens
 
+import ru.sguardo.app.ui.GROUP_P
+import ru.sguardo.app.ui.klsTitle
+import ru.sguardo.app.ui.inKls
+import ru.sguardo.app.ui.allGroups
+import ru.sguardo.app.ui.allClasses
 import android.content.Intent
 import android.provider.ContactsContract
 import androidx.compose.animation.AnimatedVisibility
@@ -127,18 +132,19 @@ fun MessagesScreen() {
     val un = live.count { it.unread > 0 }; val wt = live.count { it.last?.isOut == false }
     val arch = st.conversations.filter { it.archived && !it.trashed }
     val q = ui.q.trim().lowercase()
-    val shown = remember(st, ui.mf, ui.net, ui.fold, q, bookV, namesOn) {
+    val shown = remember(st, ui.mf, ui.net, ui.fold, ui.mkls, q, bookV, namesOn) {
         var cs = live
         if (ui.mf == "unread") cs = cs.filter { it.unread > 0 }
         if (ui.mf == "wait") cs = cs.filter { it.last?.isOut == false }
         if (ui.net != "all") cs = cs.filter { it.network == ui.net }
         if (ui.fold != "all") cs = cs.filter { repo.contact(it.contactId)?.folderId == ui.fold }
+        if (ui.mkls != "all") cs = cs.filter { repo.contact(it.contactId)?.inKls(ui.mkls) == true }
         if (q.isNotEmpty()) cs = cs.filter { (repo.nameOfConv(it) + " " + lastText(it)).lowercase().contains(q) }
         sortConvs(cs)
     }
     var found by remember { mutableStateOf<List<ru.sguardo.app.data.SearchItem>>(emptyList()) }
     LaunchedEffect(q) { if (q.length < 2) { found = emptyList(); return@LaunchedEffect }; kotlinx.coroutines.delay(350); found = repo.search(q) }
-    val canArch = arch.isNotEmpty() && ui.mf == "all" && q.isEmpty() && ui.net == "all" && ui.fold == "all"
+    val canArch = arch.isNotEmpty() && ui.mf == "all" && q.isEmpty() && ui.net == "all" && ui.fold == "all" && ui.mkls == "all"
     val density = LocalDensity.current
     var pull by remember { mutableFloatStateOf(0f) }
     val archMax = with(density) { 76.dp.toPx() }
@@ -225,13 +231,16 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
     }
 }
 
-/** «Все аккаунты» и «Все папки» под переключателем. */
+/** «Все аккаунты», «Все папки» и «Все классы» под переключателем. */
 @Composable
 private fun FilterChips() {
     val repo = LocalRepo.current; val ui = LocalUi.current; val nav = LocalNav.current
     val st by repo.state.collectAsState()
     var netOpen by remember { mutableStateOf(false) }
     var foldOpen by remember { mutableStateOf(false) }
+    var klsOpen by remember { mutableStateOf(false) }
+    val classes = remember(st) { allClasses(repo, st) }
+    val groups = remember(st) { allGroups(repo, st) }
     val nets = (Nets.keys + st.conversations.map { it.network }).distinct()
     val fo = st.folders.firstOrNull { it.id == ui.fold }
     HScroll {
@@ -248,7 +257,21 @@ private fun FilterChips() {
                 MenuItem("Все папки", if (ui.fold == "all") "check" else "grid") { ui.fold = "all"; foldOpen = false }
                 st.folders.forEach { f -> MenuItem(f.name, null, dot = folderDot(f), checked = ui.fold == f.id) { ui.fold = f.id; foldOpen = false } }
                 HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(vertical = 6.dp))
-                MenuItem("Настроить папки", "sliders") { foldOpen = false; nav.go("folders") }
+                MenuItem("Настроить папки и классы", "sliders") { foldOpen = false; nav.go("folders") }
+            }
+        }
+        Box {
+            Chip(if (ui.mkls == "all") "Все классы" else klsTitle(ui.mkls), on = ui.mkls != "all", trailingIcon = "chevD") { klsOpen = true }
+            DropdownMenu(klsOpen, { klsOpen = false }, containerColor = Sg.c.c, shape = RoundedCornerShape(6.dp)) {
+                MenuItem("Все классы", if (ui.mkls == "all") "check" else "grid") { ui.mkls = "all"; klsOpen = false }
+                classes.forEach { k -> MenuItem(k, if (ui.mkls == k) "check" else null) { ui.mkls = k; klsOpen = false } }
+                if (groups.isNotEmpty()) {
+                    HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(vertical = 6.dp))
+                    groups.forEach { g -> val key = GROUP_P + g; MenuItem(g, if (ui.mkls == key) "check" else "users") { ui.mkls = key; klsOpen = false } }
+                }
+                if (classes.isEmpty() && groups.isEmpty()) MenuItem("Классов пока нет", null) { klsOpen = false; nav.go("folders") }
+                HorizontalDivider(color = Sg.c.hair, modifier = Modifier.padding(vertical = 6.dp))
+                MenuItem("Настроить папки и классы", "sliders") { klsOpen = false; nav.go("folders") }
             }
         }
     }

@@ -94,6 +94,10 @@ import ru.sguardo.app.data.Clock
 import ru.sguardo.app.ui.HScroll
 import ru.sguardo.app.ui.Ic
 import ru.sguardo.app.ui.LocalPerms
+import ru.sguardo.app.ui.Permissions
+import ru.sguardo.app.ui.Overlays
+import ru.sguardo.app.ui.DialogSpec
+import ru.sguardo.app.ui.DialogBtn
 import ru.sguardo.app.ui.LocalRepo
 import ru.sguardo.app.ui.T
 import ru.sguardo.app.ui.theme.Sg
@@ -155,6 +159,9 @@ class RecState(val circle: Boolean, val started: Long) {
 /** Управление кружком из CameraX: превью, запись в файл, вспышка, смена камеры. */
 class CircleCam {
     var preview: PreviewView? = null
+    /** use case превью: подключаем к PreviewView, как только он создан (порядок может быть любой) */
+    var previewUse: androidx.camera.core.Preview? = null
+    var live by mutableStateOf(false)
     var capture: VideoCapture<Recorder>? = null
     var recording: Recording? = null
     var camera: androidx.camera.core.Camera? = null
@@ -165,6 +172,36 @@ class CircleCam {
 }
 
 const val TEMPLATE_KEY = "tpl"
+
+/** Нарисованные камера и микрофон только в снимках Robolectric; в приложении (и в демо) всегда настоящие. */
+val FAKE_DEVICES: Boolean = Build.FINGERPRINT == "robolectric"
+
+fun hasMedia(circle: Boolean, perms: Permissions) = if (circle) perms.hasCamera() && perms.hasAudio() else perms.hasAudio()
+
+/** Доступ к микрофону (для кружка ещё к камере): объяснение, затем системное окно; если система больше не спрашивает, ведём в настройки. */
+fun askMedia(circle: Boolean, perms: Permissions, ov: Overlays, repo: ru.sguardo.app.data.Repo) {
+    val what = if (circle) "камере и микрофону" else "микрофону"
+    val blocked = { if (circle) perms.cameraBlocked() else perms.audioBlocked() }
+    val toSettings = {
+        ov.confirm(DialogSpec("Нет доступа к $what",
+            "Телефон больше не показывает запрос. Откройте настройки Sguardo, раздел «Разрешения», и включите ${if (circle) "камеру и микрофон" else "микрофон"}.",
+            buttons = listOf(DialogBtn("Открыть настройки") { perms.openSettings() })))
+    }
+    if (blocked()) { toSettings(); return }
+    ov.confirm(DialogSpec(if (circle) "Камера и микрофон для кружков" else "Микрофон для голосовых",
+        if (circle) "Кружок снимается камерой телефона со звуком, пока вы держите кнопку. Сейчас телефон спросит разрешение."
+        else "Голосовое записывается, пока вы держите кнопку. Сейчас телефон спросит разрешение.",
+        buttons = listOf(DialogBtn("Продолжить") {
+            val done: (Boolean) -> Unit = { ok ->
+                when {
+                    ok -> repo.toast("Готово. Удерживайте кнопку, чтобы записать")
+                    blocked() -> toSettings()
+                    else -> repo.toast("Без доступа к $what записать не получится")
+                }
+            }
+            if (circle) perms.camera(done) else perms.audio(done)
+        })))
+}
 fun hasAnyCamera(ctx: Context) = ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
 
 /** Поле ввода чата (Android): скрепка, текст, шаблоны, «позже»; справа — отправка или микрофон/кружок. */
@@ -183,6 +220,7 @@ fun Composer(
 ) {
     val repo = LocalRepo.current
     val perms = LocalPerms.current
+    val ov = ru.sguardo.app.ui.LocalOv.current
     val ctxC = LocalContext.current
     var circleMode by remember { mutableStateOf(false) }
     val has = text.value.isNotBlank()
@@ -234,30 +272,15 @@ fun Composer(
                             val upEarly = withTimeoutOrNull(220) { waitForUpOrCancellation() }
                             if (upEarly != null) {
                                 circleMode = !circleMode
-                                val need = !repo.demo.value && (if (circleMode) !(perms.hasCamera() && perms.hasAudio()) else !perms.hasAudio())
-                                if (need) {
-                                    // доступ спрашиваем сразу, чтобы удержание потом сразу писало
-                                    val what = if (circleMode) "камере и микрофону" else "микрофону"
-                                    val done: (Boolean) -> Unit = { ok -> repo.toast(if (ok) (if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
-                                        else "Без доступа к $what записать не получится. Разрешите его в настройках телефона") }
-                                    if (circleMode) perms.camera(done) else perms.audio(done)
-                                } else repo.toast(if (circleMode) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
+                                val c = circleMode
+                                // доступ спрашиваем сразу, чтобы удержание потом сразу писало
+                                if (!hasMedia(c, perms)) askMedia(c, perms, ov, repo)
+                                else repo.toast(if (c) "Кружок: удерживайте, чтобы записать" else "Голосовое: удерживайте, чтобы записать")
                                 return@awaitEachGesture
                             }
-                            if (circleMode && !repo.demo.value && !hasAnyCamera(ctxC)) { repo.toast("На этом устройстве нет камеры, кружок записать нельзя. Голосовое доступно: нажмите на кнопку ещё раз"); return@awaitEachGesture }
+                            if (circleMode && !hasAnyCamera(ctxC)) { repo.toast("На этом устройстве нет камеры, кружок записать нельзя. Голосовое доступно: нажмите на кнопку ещё раз"); return@awaitEachGesture }
+                            if (!hasMedia(circleMode, perms)) { askMedia(circleMode, perms, ov, repo); return@awaitEachGesture }
                             val r = RecState(circleMode, System.currentTimeMillis())
-                            var ok = true
-                            if (!repo.demo.value) {
-                                ok = if (circleMode) perms.hasCamera() && perms.hasAudio() else perms.hasAudio()
-                                if (!ok) {
-                                    val what = if (circleMode) "камере и микрофону" else "микрофону"
-                                    val done: (Boolean) -> Unit = { granted ->
-                                        repo.toast(if (granted) "Готово. Удерживайте кнопку, чтобы записать" else "Без доступа к $what записать не получится. Разрешите его в настройках телефона")
-                                    }
-                                    if (circleMode) perms.camera(done) else perms.audio(done)
-                                    return@awaitEachGesture
-                                }
-                            }
                             rec.value = r
                             val sx = down.position.x; val sy = down.position.y
                             while (true) {
@@ -305,8 +328,8 @@ private fun RecUi(r: RecState, onCancel: () -> Unit) {
         else Box(Modifier.size(10.dp).graphicsLayer { alpha = a }.background(Color(0xFFE5484D), CircleShape))
         Spacer(Modifier.width(10.dp))
         T("${(t / 60).toInt()}:${"%02d".format((t % 60).toInt())},${((t % 1) * 10).toInt()}", body(15f), modifier = Modifier.width(50.dp))
-        // живая волна громкости
-        Row(Modifier.padding(end = 8.dp).width(34.dp).height(24.dp), horizontalArrangement = Arrangement.spacedBy(1.5.dp), verticalAlignment = Alignment.CenterVertically) {
+        // живая волна громкости (у кружка её нет, как в Telegram)
+        if (!r.circle) Row(Modifier.padding(end = 8.dp).width(34.dp).height(24.dp), horizontalArrangement = Arrangement.spacedBy(1.5.dp), verticalAlignment = Alignment.CenterVertically) {
             val l = r.levels.takeLast(10)
             repeat(10) { i ->
                 val v = l.getOrNull(i - (10 - l.size)) ?: 0f
@@ -367,7 +390,7 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
         future.addListener({
             try {
                 val provider = future.get()
-                val preview = androidx.camera.core.Preview.Builder().build().also { p -> cam.preview?.let { pv -> p.setSurfaceProvider(pv.surfaceProvider) } }
+                val preview = androidx.camera.core.Preview.Builder().build().also { p -> cam.previewUse = p; cam.preview?.let { pv -> p.setSurfaceProvider(pv.surfaceProvider) } }
                 provider.unbindAll()
                 val hasFront = try { provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) } catch (_: Exception) { false }
                 val hasBack = try { provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) } catch (_: Exception) { false }
@@ -397,13 +420,14 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
     }
     if (!demo) DisposableEffect(Unit) {
         onDispose {
+            cam.live = false; cam.preview = null; cam.previewUse = null
             // даём записи завершиться и отпускаем камеру
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 try { ProcessCameraProvider.getInstance(ctx).get().unbindAll() } catch (_: Exception) {}
             }, 1500)
         }
     }
-    Box(Modifier.fillMaxSize().background(if (r.flash) Color(0x99FFFAF0) else Color(0x80060C0C)).clickable(enabled = false) {}) {
+    Box(Modifier.fillMaxSize().background(if (r.flash) Color(0xE6FFFAF0) else Color(0xE6060C0C)).clickable(enabled = false) {}) {
         val t = (now - t0) / 1000f
         Column(Modifier.fillMaxWidth().padding(top = 110.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
@@ -411,7 +435,19 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
                     .let { if (r.flash) it.drawBehind { drawCircle(Color.White.copy(alpha = .95f), size.minDimension / 2 + 16.dp.toPx()) } else it }
                     .clip(CircleShape)) {
                     if (demo) DemoCam(r.back, Modifier.fillMaxSize())
-                    else AndroidView({ c -> PreviewView(c).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; cam.preview = this } }, Modifier.fillMaxSize())
+                    else {
+                        // TextureView (COMPATIBLE): SurfaceView не обрезается кругом и в эмуляторах часто остаётся чёрным
+                        AndroidView({ c -> PreviewView(c).apply {
+                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
+                            cam.preview = this
+                            cam.previewUse?.setSurfaceProvider(surfaceProvider)
+                            previewStreamState.observe(owner) { st -> cam.live = st == PreviewView.StreamState.STREAMING }
+                        } }, Modifier.fillMaxSize().background(Color(0xFF0E1615)))
+                        if (!cam.live) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            androidx.compose.material3.CircularProgressIndicator(color = Color.White.copy(alpha = .8f), strokeWidth = 2.5.dp, modifier = Modifier.size(34.dp))
+                        }
+                    }
                 }
                 Canvas(Modifier.size(300.dp)) {
                     drawArc(Color.White.copy(alpha = .95f), -90f, 360f * (t / 60f).coerceAtMost(1f), false, Offset(2.dp.toPx(), 2.dp.toPx()),
@@ -427,8 +463,8 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
                 }
             }
             Spacer(Modifier.height(18.dp))
-            T(if (r.locked) "Запись идёт. Нажмите на стрелку, чтобы отправить" else "Смахните вверх, чтобы записывать без рук", body(13.5f),
-                if (r.flash) Color(0xFF14211F) else Color.White.copy(alpha = .88f), modifier = Modifier.padding(horizontal = 30.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+            if (!r.locked) T("Вверх — запись без рук", body(13.5f),
+                if (r.flash) Color(0xFF14211F) else Color.White.copy(alpha = .75f), modifier = Modifier.padding(horizontal = 30.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
 }

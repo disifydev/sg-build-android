@@ -91,6 +91,8 @@ import ru.sguardo.app.ui.VGap
 import ru.sguardo.app.ui.allClasses
 import ru.sguardo.app.ui.classKey
 import ru.sguardo.app.ui.classes
+import ru.sguardo.app.ui.allGroups
+import ru.sguardo.app.ui.groups
 import ru.sguardo.app.ui.colFor
 import ru.sguardo.app.ui.folderDot
 import ru.sguardo.app.ui.folderHex
@@ -133,15 +135,15 @@ fun MoreScreen() {
         Sect("Работа")
         Grp {
             Gi("Расписание", "Сегодня $today ${Fmt.plural(today, "занятие", "занятия", "занятий")}", "cal", onClick = { nav.go("schedule") }) { Chev() }
-            Gi("Папки", "Названия, цвета и порядок", "sliders", onClick = { nav.go("folders") }) { Chev() }
-            Gi("Классы и предметы", "$kl ${Fmt.plural(kl, "класс", "класса", "классов")}, ${subjects.size} ${Fmt.plural(subjects.size, "предмет", "предмета", "предметов")}", "book", onClick = { nav.go("lists") }) { Chev() }
+            Gi("Папки и классы", "${st.folders.size} ${Fmt.plural(st.folders.size, "папка", "папки", "папок")}, $kl ${Fmt.plural(kl, "класс", "класса", "классов")}, ${subjects.size} ${Fmt.plural(subjects.size, "предмет", "предмета", "предметов")}", "sliders", onClick = { nav.go("folders") }) { Chev() }
             val s = acc?.sessions ?: 1
             Gi("Вход и устройства", "$s ${Fmt.plural(s, "активный сеанс", "активных сеанса", "активных сеансов")}", "shield", onClick = { nav.go("security") }) { Chev() }
         }
         Sect("Уведомления")
         Grp {
             val toggle1 = { on: Boolean ->
-                if (on && !notifOk) perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); if (ok) repo.registerPushIfPossible(); repo.toast(if (ok) "Уведомления включены" else "Доступ не выдан") }
+                if (on && !notifOk && perms.notificationsBlocked()) perms.openNotifySettings()
+                else if (on && !notifOk) perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); if (ok) repo.registerPushIfPossible(); repo.toast(if (ok) "Уведомления включены" else "Доступ не выдан") }
                 else { repo.prefs.setNotifyMessages(on); if (on) repo.registerPushIfPossible() else repo.unregisterPush() }
             }
             val ps by repo.pushStatus.collectAsState()
@@ -320,58 +322,73 @@ private fun ColumnScope.StaffSheet(t: TeamMember) {
     }
 }
 
-/** Классы (для фильтра учеников) и предметы (для расписания). */
+/** Старый адрес «Классы и предметы» ведёт на общий экран. */
 @Composable
-fun ListsScreen() {
-    val repo = LocalRepo.current; val nav = LocalNav.current; val ov = LocalOv.current
+fun ListsScreen() = FoldersScreen()
+
+/** Классы и группы (для фильтра учеников), предметы (для расписания): часть экрана «Папки и классы». */
+@Composable
+private fun ClassesSection() {
+    val repo = LocalRepo.current; val ov = LocalOv.current
     val st by repo.state.collectAsState()
     val extra by repo.prefs.extraClasses.collectAsState()
+    val extraG by repo.prefs.extraGroups.collectAsState()
     val subjects by repo.prefs.subjects.collectAsState()
     val classes = remember(st, extra) { allClasses(repo, st) }
-    Column(Modifier.fillMaxSize().background(Sg.c.surface)) {
-        SubTopBar("Классы и предметы", { nav.back() })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Hint("Классы нужны для фильтра учеников, предметы для расписания. Нажмите, чтобы переименовать или удалить.", Modifier.padding(top = 8.dp))
-            Sect("Классы", top = 4.dp)
-            Grp {
-                if (classes.isEmpty()) Gi("Классов пока нет", "Добавьте первый, например «9 класс»")
-                classes.forEach { k ->
-                    val n = st.contacts.count { k in it.classes() }
-                    Gi(k, "$n ${Fmt.plural(n, "ученик", "ученика", "учеников")}", "users", onClick = { ov.openSheet { ListItemSheet(true, k) } }) { Ic("edit", Sg.c.faint, size = 16.dp) }
-                }
-            }
-            Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) { Btn("Добавить класс", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet(true, null) } } }
-            Sect("Предметы")
-            Grp {
-                subjects.forEach { s ->
-                    Gi(s.name, leading = { Box(Modifier.padding(horizontal = 5.dp).size(14.dp).background(hexColor(s.color), CircleShape)) }, onClick = { ov.openSheet { ListItemSheet(false, s.name) } }) { Ic("edit", Sg.c.faint, size = 16.dp) }
-                }
-            }
-            Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 40.dp), contentAlignment = Alignment.Center) { Btn("Добавить предмет", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet(false, null) } } }
+    val groups = remember(st, extraG) { allGroups(repo, st) }
+    Sect("Классы", top = 18.dp)
+    Hint("По классам и группам фильтруются чаты и клиенты. Класс и группу ученика выбирают в его карточке.")
+    Grp {
+        if (classes.isEmpty()) Gi("Классов пока нет", "Добавьте первый, например «9 класс»")
+        classes.forEach { k ->
+            val n = st.contacts.count { k in it.classes() }
+            Gi(k, "$n ${Fmt.plural(n, "ученик", "ученика", "учеников")}", "users", onClick = { ov.openSheet { ListItemSheet("class", k) } }) { Ic("edit", Sg.c.faint, size = 16.dp) }
         }
     }
+    Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) { Btn("Добавить класс", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet("class", null) } } }
+    Sect("Группы")
+    Grp {
+        if (groups.isEmpty()) Gi("Групп пока нет", "Например, «Мини-группа ОГЭ»")
+        groups.forEach { g ->
+            val n = st.contacts.count { g in it.groups() }
+            Gi(g, "$n ${Fmt.plural(n, "ученик", "ученика", "учеников")}", "users", onClick = { ov.openSheet { ListItemSheet("group", g) } }) { Ic("edit", Sg.c.faint, size = 16.dp) }
+        }
+    }
+    Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) { Btn("Добавить группу", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet("group", null) } } }
+    Sect("Предметы")
+    Grp {
+        subjects.forEach { s ->
+            Gi(s.name, leading = { Box(Modifier.padding(horizontal = 5.dp).size(14.dp).background(hexColor(s.color), CircleShape)) }, onClick = { ov.openSheet { ListItemSheet("subject", s.name) } }) { Ic("edit", Sg.c.faint, size = 16.dp) }
+        }
+    }
+    Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 40.dp), contentAlignment = Alignment.Center) { Btn("Добавить предмет", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { ListItemSheet("subject", null) } } }
 }
 
 @Composable
-private fun ColumnScope.ListItemSheet(isClass: Boolean, cur: String?) {
+private fun ColumnScope.ListItemSheet(kind: String, cur: String?) {
     val repo = LocalRepo.current; val ov = LocalOv.current
     val subjects = repo.prefs.subjects.value
+    val isClass = kind == "class"; val isGroup = kind == "group"
     var n by remember { mutableStateOf(cur ?: "") }
     var col by remember { mutableStateOf(subjects.firstOrNull { it.name == cur }?.color ?: PALF[0]) }
-    SheetTitle(if (cur != null) (if (isClass) "Класс" else "Предмет") else (if (isClass) "Новый класс" else "Новый предмет"))
-    Lbl("Название"); SField(n, { n = it }, if (isClass) "Например, 8 класс" else "Например, Английский", "edit")
-    if (!isClass) { Lbl("Цвет в расписании"); Swatches(col) { col = it } }
+    val word = when (kind) { "class" -> "Класс"; "group" -> "Группа"; else -> "Предмет" }
+    SheetTitle(if (cur != null) word else when (kind) { "class" -> "Новый класс"; "group" -> "Новая группа"; else -> "Новый предмет" })
+    Lbl("Название"); SField(n, { n = it }, when (kind) { "class" -> "Например, 8 класс"; "group" -> "Например, Мини-группа ОГЭ"; else -> "Например, Английский" }, "edit")
+    if (kind == "subject") { Lbl("Цвет в расписании"); Swatches(col) { col = it } }
     VGap(18.dp)
     Btn(if (cur != null) "Сохранить" else "Добавить", icon = "check", wide = true) {
         val name = n.trim()
         if (name.isEmpty()) { repo.toast("Введите название"); return@Btn }
         ov.closeSheet()
-        if (isClass) {
-            val extra = repo.prefs.extraClasses.value
-            if (cur == null) { repo.prefs.setExtraClasses((extra + name).distinct()); repo.toast("Добавлено") }
+        if (isClass || isGroup) {
+            val extra = if (isClass) repo.prefs.extraClasses.value else repo.prefs.extraGroups.value
+            val save: (List<String>) -> Unit = { if (isClass) repo.prefs.setExtraClasses(it) else repo.prefs.setExtraGroups(it) }
+            val used = cur != null && repo.state.value.contacts.any { if (isClass) cur in it.classes() else cur in it.groups() }
+            val key: (String) -> String = { if (isClass) classKey(it) else it }
+            if (cur == null) { save((extra + name).distinct()); repo.toast("Добавлено") }
             else {
-                repo.prefs.setExtraClasses(extra.map { if (it == cur) name else it })
-                if (repo.state.value.contacts.any { cur in it.classes() }) repo.act(obj("type" to "renameCollection", "kind" to "class", "from" to classKey(cur), "to" to classKey(name)), "Сохранено")
+                save(extra.map { if (it == cur) name else it })
+                if (used) repo.act(obj("type" to "renameCollection", "kind" to kind, "from" to key(cur), "to" to key(name)), "Сохранено")
                 else repo.toast("Сохранено")
             }
         } else {
@@ -385,11 +402,12 @@ private fun ColumnScope.ListItemSheet(isClass: Boolean, cur: String?) {
         VGap(6.dp)
         Btn("Удалить", wide = true, kind = BtnKind.Text, danger = true) {
             ov.closeSheet()
-            ov.confirm(DialogSpec("Удалить «$cur»?", if (isClass) "У учеников этого класса поле станет пустым." else "Занятия по этому предмету останутся в расписании.",
+            ov.confirm(DialogSpec("Удалить «$cur»?", when (kind) { "class" -> "У учеников этого класса поле станет пустым."; "group" -> "Ученики останутся, только без этой группы."; else -> "Занятия по этому предмету останутся в расписании." },
                 buttons = listOf(DialogBtn("Удалить", danger = true) {
-                    if (isClass) {
-                        repo.prefs.setExtraClasses(repo.prefs.extraClasses.value - cur)
-                        if (repo.state.value.contacts.any { cur in it.classes() }) repo.act(obj("type" to "deleteCollection", "kind" to "class", "name" to classKey(cur)), "Удалено") else repo.toast("Удалено")
+                    if (isClass || isGroup) {
+                        if (isClass) repo.prefs.setExtraClasses(repo.prefs.extraClasses.value - cur) else repo.prefs.setExtraGroups(repo.prefs.extraGroups.value - cur)
+                        val used = repo.state.value.contacts.any { if (isClass) cur in it.classes() else cur in it.groups() }
+                        if (used) repo.act(obj("type" to "deleteCollection", "kind" to kind, "name" to (if (isClass) classKey(cur) else cur)), "Удалено") else repo.toast("Удалено")
                     } else { repo.prefs.setSubjects(repo.prefs.subjects.value.filter { it.name != cur }); repo.toast("Удалено") }
                 })))
         }
@@ -422,9 +440,10 @@ fun FoldersScreen() {
     var dragIdx by remember { mutableIntStateOf(-1) }
     var dragDy by remember { mutableFloatStateOf(0f) }
     Column(Modifier.fillMaxSize().background(Sg.c.surface)) {
-        SubTopBar("Папки", { nav.back() })
+        SubTopBar("Папки и классы", { nav.back() })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Hint("Папка показывает, на каком этапе клиент. Потяните за точки слева, чтобы поменять порядок. Нажмите на папку, чтобы переименовать или сменить цвет.", Modifier.padding(top = 8.dp))
+            Sect("Папки", top = 4.dp)
+            Hint("Папка показывает, на каком этапе клиент. Потяните за точки слева, чтобы поменять порядок. Нажмите на папку, чтобы переименовать или сменить цвет.")
             val folders = st.folders
             val to = if (dragIdx >= 0) (dragIdx + (dragDy / rowH).roundToInt()).coerceIn(0, folders.lastIndex) else -1
             Grp {
@@ -461,7 +480,8 @@ fun FoldersScreen() {
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 40.dp), contentAlignment = Alignment.Center) { Btn("Создать папку", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { FolderSheet(null) } } }
+            Box(Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.Center) { Btn("Создать папку", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { FolderSheet(null) } } }
+            ClassesSection()
         }
     }
 }

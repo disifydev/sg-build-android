@@ -36,7 +36,7 @@ data class Notif(val id: String, val kind: String, val title: String, val text: 
  * Состояние приложения. Данные — /api/state, действия — /api/actions и отдельные адреса,
  * живые обновления — SSE /api/events (delta, typing, presence). В демо-режиме всё то же самое, но локально.
  */
-class Repo private constructor(private val ctx: Context) {
+class Repo private constructor(val ctx: Context) {
     companion object {
         @Volatile private var inst: Repo? = null
         fun get(ctx: Context): Repo = inst ?: synchronized(this) { inst ?: Repo(ctx.applicationContext).also { inst = it } }
@@ -424,7 +424,9 @@ class Repo private constructor(private val ctx: Context) {
     /** Загрузить файл (фото, голосовое, кружок, документ) и отправить. */
     fun sendFile(convId: String, file: File, name: String, mime: String, kind: String, round: Boolean = false, duration: Int? = null, caption: String = "") {
         if (demo.value) {
-            val a = Attachment(kind = kind, name = name, url = "", round = round, duration = duration?.toDouble())
+            // в демо запись настоящая и остаётся на телефоне: её можно сразу прослушать или посмотреть
+            val local = if (file.exists() && file.length() > 0) file.toURI().toString() else ""
+            val a = Attachment(kind = kind, name = name, url = local, round = round, duration = duration?.toDouble())
             send(convId, caption, attachments = listOf(a)); return
         }
         if (!file.exists() || file.length() == 0L) { toast("Файл пустой или не сохранился, попробуйте ещё раз"); return }

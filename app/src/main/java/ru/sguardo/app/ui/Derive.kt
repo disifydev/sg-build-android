@@ -40,6 +40,12 @@ const val CLASS_P = "класс:"
 fun classTitle(n: String) = if (n.matches(Regex("^\\d{1,2}$"))) "$n класс" else n
 fun classKey(title: String) = Regex("^(\\d{1,2}) класс$").find(title)?.groupValues?.get(1) ?: title
 fun Contact.classes() = tags.orEmpty().filter { it.startsWith(CLASS_P) }.map { classTitle(it.removePrefix(CLASS_P)) }
+const val GROUP_P = "группа:"
+fun Contact.groups() = tags.orEmpty().filter { it.startsWith(GROUP_P) }.map { it.removePrefix(GROUP_P) }
+/** Фильтр «класс или группа»: значение фильтра — название класса или «группа:Имя». */
+fun Contact.inKls(k: String) = k == "all" || (if (k.startsWith(GROUP_P)) k.removePrefix(GROUP_P) in groups() else k in classes())
+fun klsTitle(k: String) = if (k.startsWith(GROUP_P)) k.removePrefix(GROUP_P) else k
+fun allGroups(r: Repo, s: AppState): List<String> = (s.contacts.flatMap { it.groups() } + r.prefs.extraGroups.value).distinct().sorted()
 fun Contact.plainTags() = tags.orEmpty().filter { !it.startsWith(CLASS_P) && !it.startsWith("группа:") }
 
 /** Классы кабинета: из меток клиентов плюс созданные в приложении без учеников. */

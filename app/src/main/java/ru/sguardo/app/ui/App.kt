@@ -116,6 +116,8 @@ class UiState {
     var q by mutableStateOf("")
     var cs by mutableStateOf("all")
     var kls by mutableStateOf("all")
+    /** фильтр по классу или группе в «Сообщениях» */
+    var mkls by mutableStateOf("all")
     var pf by mutableStateOf("all")
     var archShown by mutableStateOf(false)
     var prevTab by mutableIntStateOf(0)
@@ -168,6 +170,20 @@ fun SgApp(repo: Repo, permissions: Permissions) {
         LaunchedEffect(Unit) { delay(650); splash = false }
         val ui = remember { UiState() }
         val ov = remember { Overlays() }
+        // уже прошли знакомство раньше (например, в прошлой версии), а доступа к уведомлениям нет: один раз объясняем и спрашиваем
+        val ready = !splash && onboarded && phase == Phase.Ready
+        LaunchedEffect(ready) {
+            if (!ready || permissions.hasNotifications()) return@LaunchedEffect
+            val sp = repo.ctx.getSharedPreferences("sg_perm", android.content.Context.MODE_PRIVATE)
+            if (sp.getBoolean("notify_explained", false)) return@LaunchedEffect
+            sp.edit().putBoolean("notify_explained", true).apply()
+            delay(900)
+            ov.confirm(DialogSpec("Включить уведомления?", "Пришлём уведомление, когда напишет клиент или подойдёт время напомнить об оплате. Нажатие сразу открывает нужный чат.",
+                buttons = listOf(DialogBtn("Включить") {
+                    if (permissions.notificationsBlocked()) permissions.openNotifySettings()
+                    else permissions.notifications { ok -> repo.prefs.setNotifyMessages(ok); repo.toast(if (ok) "Уведомления включены" else "Уведомления выключены. Включить можно в разделе «Ещё»") }
+                })))
+        }
         CompositionLocalProvider(LocalRepo provides repo, LocalUi provides ui, LocalOv provides ov, LocalPerms provides permissions) {
             Box(Modifier.fillMaxSize().background(Sg.c.surface)) {
                 androidx.compose.runtime.key(demo) { when {
@@ -195,6 +211,11 @@ interface Permissions {
     fun hasCamera(): Boolean
     fun pickImage(done: (android.net.Uri?) -> Unit)
     fun pickFile(done: (android.net.Uri?) -> Unit)
+    fun audioBlocked(): Boolean = false
+    fun cameraBlocked(): Boolean = false
+    fun notificationsBlocked(): Boolean = false
+    fun openSettings() {}
+    fun openNotifySettings() {}
 }
 
 object NoPermissions : Permissions {

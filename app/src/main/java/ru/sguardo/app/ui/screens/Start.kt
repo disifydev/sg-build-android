@@ -92,7 +92,7 @@ fun OnboardingScreen(initial: String = "notify") {
             art = { NotifyArt() }, dot = 0, title = "Не пропускайте клиентов",
             text = "Пришлём уведомление, когда напишет клиент или подойдёт время напомнить об оплате. Нажатие сразу открывает нужный чат.",
             primary = "Включить уведомления", secondary = "Позже",
-            onPrimary = { perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); step = "contacts" } },
+            onPrimary = { perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); repo.toast(if (ok) "Уведомления включены" else "Уведомления выключены. Включить можно в разделе «Ещё»"); step = "contacts" } },
             onSecondary = { step = "contacts" },
         ) else ObPage(
             art = { ContactsArt() }, dot = 1, title = "Имена из контактов",

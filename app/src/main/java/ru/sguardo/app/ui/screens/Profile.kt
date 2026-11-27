@@ -1,5 +1,7 @@
 package ru.sguardo.app.ui.screens
 
+import ru.sguardo.app.ui.groups
+import ru.sguardo.app.ui.allGroups
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -158,6 +160,19 @@ fun ProfileScreen(id: String) {
                             kOpen = false
                             cls?.let { old -> repo.act(obj("type" to "setCollection", "contactId" to conv.contactId, "kind" to "class", "name" to classKey(old), "on" to false)) }
                             if (k != cls) repo.act(obj("type" to "setCollection", "contactId" to conv.contactId, "kind" to "class", "name" to classKey(k), "on" to true), "Класс: $k")
+                        } }
+                    }
+                }
+                // группы (у ученика их может быть несколько)
+                var gOpen by remember { mutableStateOf(false) }
+                val myGroups = c?.groups().orEmpty()
+                val groupsAll = allGroups(repo, st)
+                if (groupsAll.isNotEmpty() || myGroups.isNotEmpty()) Box {
+                    IRowCustom("группа", onClick = { gOpen = true }) { T(myGroups.joinToString(", ").ifBlank { "Не указана" }, body(15.5f), if (myGroups.isEmpty()) Sg.c.faint else Sg.c.fg) }
+                    DropdownMenu(gOpen, { gOpen = false }, containerColor = Sg.c.c, shape = RoundedCornerShape(6.dp)) {
+                        groupsAll.forEach { g -> val on = g in myGroups; MenuItem(g, if (on) "check" else null) {
+                            gOpen = false
+                            repo.act(obj("type" to "setCollection", "contactId" to conv.contactId, "kind" to "group", "name" to g, "on" to !on), if (on) "Убрали из «$g»" else "Добавили в «$g»")
                         } }
                     }
                 }

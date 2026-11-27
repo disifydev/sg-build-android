@@ -54,21 +54,46 @@ class MainActivity : ComponentActivity(), Permissions {
 
     private fun handle(i: Intent?) { i?.getStringExtra("url")?.let { repo.handleUrl(it) } }
 
+    private val askedSp by lazy { getSharedPreferences("sg_perm", MODE_PRIVATE) }
+
     private fun ask(perms: Array<String>, done: (Boolean) -> Unit) {
         val need = perms.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (need.isEmpty()) { done(true); return }
-        permDone = done; permLauncher.launch(need.toTypedArray())
+        android.util.Log.i("SGPERM", "системный запрос: ${need.joinToString()}")
+        askedSp.edit().apply { need.forEach { putBoolean(it, true) } }.apply()
+        permDone = { ok -> android.util.Log.i("SGPERM", "ответ: $ok"); done(ok) }; permLauncher.launch(need.toTypedArray())
+    }
+
+    /** Уже спрашивали, а система больше не покажет окно («Больше не спрашивать» или два отказа). */
+    private fun isBlocked(vararg perms: String) = perms.any { p ->
+        !granted(p) && askedSp.getBoolean(p, false) && !shouldShowRequestPermissionRationale(p)
     }
 
     override fun notifications(done: (Boolean) -> Unit) {
         if (Build.VERSION.SDK_INT >= 33) ask(arrayOf(Manifest.permission.POST_NOTIFICATIONS)) { ok -> if (ok) repo.registerPushIfPossible(); done(ok) }
-        else { repo.registerPushIfPossible(); done(true) }
+        else {
+            // до Android 13 окна-запроса у системы нет: уведомления включены сразу, если их не выключили в настройках
+            repo.registerPushIfPossible()
+            val on = androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()
+            if (!on) openNotifySettings()
+            done(on)
+        }
+    }
+    override fun audioBlocked() = isBlocked(Manifest.permission.RECORD_AUDIO)
+    override fun cameraBlocked() = isBlocked(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+    override fun notificationsBlocked() = if (Build.VERSION.SDK_INT >= 33) isBlocked(Manifest.permission.POST_NOTIFICATIONS) else !hasNotifications()
+    override fun openSettings() {
+        startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    override fun openNotifySettings() {
+        try { startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        catch (_: Exception) { openSettings() }
     }
     override fun contacts(done: (Boolean) -> Unit) = ask(arrayOf(Manifest.permission.READ_CONTACTS)) { ok -> repo.book.refresh(); done(ok) }
     override fun audio(done: (Boolean) -> Unit) = ask(arrayOf(Manifest.permission.RECORD_AUDIO), done)
     override fun camera(done: (Boolean) -> Unit) = ask(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO), done)
     override fun hasContacts() = granted(Manifest.permission.READ_CONTACTS)
-    override fun hasNotifications() = Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS)
+    override fun hasNotifications() = androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled() && (Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS))
     override fun hasAudio() = granted(Manifest.permission.RECORD_AUDIO)
     override fun hasCamera() = granted(Manifest.permission.CAMERA)
     override fun pickImage(done: (Uri?) -> Unit) { pickDone = done; imageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
