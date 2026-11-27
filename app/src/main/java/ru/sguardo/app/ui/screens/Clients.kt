@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.foundation.layout.size
 import ru.sguardo.app.ui.SgSwitch
 import ru.sguardo.app.ui.Gi
 import ru.sguardo.app.ui.Sect
