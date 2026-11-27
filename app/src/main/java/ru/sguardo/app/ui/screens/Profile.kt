@@ -375,13 +375,13 @@ fun EditContactScreen(id: String) {
         nav.back()
     }
     // как «Изменить контакт» в Telegram: крестик и галочка, аватар по центру, карточки полей с пояснениями
-    Column(Modifier.fillMaxSize().background(Sg.c.surface).windowInsetsPadding(WindowInsets.statusBars).imePadding().padding(horizontal = 12.dp)) {
-        Box {
+    Column(Modifier.fillMaxSize().background(Sg.c.surface).windowInsetsPadding(WindowInsets.statusBars).imePadding().padding(start = 12.dp, end = 12.dp, top = 14.dp)) {
+        Box(Modifier.fillMaxWidth().height(150.dp)) {
             ru.sguardo.app.ui.FormTop("", { nav.back() }, save)
-            Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) { Avatar("$first $last".trim().ifBlank { c?.name ?: "" }, 104.dp, ring = Sg.c.surface) }
+            Box(Modifier.align(Alignment.BottomCenter)) { Avatar("$first $last".trim().ifBlank { c?.name ?: "" }, 104.dp, ring = Sg.c.surface) }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(22.dp))
             ru.sguardo.app.ui.FormCard {
                 ru.sguardo.app.ui.FormField(first, { first = it }, "Имя", cap = KeyboardCapitalization.Words)
                 ru.sguardo.app.ui.FormField(last, { last = it }, "Фамилия", divider = true, cap = KeyboardCapitalization.Words)
