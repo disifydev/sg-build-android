@@ -1,5 +1,8 @@
 package ru.sguardo.app.ui.screens
 
+import ru.sguardo.app.ui.SgSwitch
+import ru.sguardo.app.ui.Gi
+import ru.sguardo.app.ui.Sect
 import ru.sguardo.app.ui.GROUP_P
 import ru.sguardo.app.ui.klsTitle
 import ru.sguardo.app.ui.inKls
@@ -184,39 +187,62 @@ private fun ClientCard(c: Contact, all: Boolean) {
 @Composable
 fun ColumnScope.NewClientSheet() {
     val repo = LocalRepo.current; val ui = LocalUi.current; val ov = LocalOv.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val st by repo.state.collectAsState()
-    var name by remember { mutableStateOf("") }
+    var first by remember { mutableStateOf("") }
+    var last by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
     var net by remember { mutableStateOf("telegram") }
+    var book by remember { mutableStateOf(false) }
     var folder by remember { mutableStateOf(if (ui.cs == "all") st.folders.firstOrNull()?.id else ui.cs) }
     val classes = allClasses(repo, st)
-    var kl by remember { mutableStateOf(classes.firstOrNull()) }
-    SheetTitle("Новый клиент")
-    Lbl("Имя"); SField(name, { name = it }, "Имя и фамилия", "user")
-    Lbl("Телефон"); SField(phone, { phone = it }, "+7", "phone", keyboard = KeyboardType.Phone)
-    Lbl("Соцсеть")
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    var kl by remember { mutableStateOf<String?>(null) }
+    val add = add@{
+        val n = "$first $last".trim()
+        if (n.isEmpty()) { repo.toast("Укажите имя клиента"); return@add }
+        ov.closeSheet()
+        repo.act(obj("type" to "addContact", "name" to n, "phone" to phone.trim().ifBlank { null }, "network" to net, "folderId" to folder, "note" to note.trim().ifBlank { null },
+            "tags" to listOfNotNull(kl?.let { CLASS_P + classKey(it) })), "$n: папка «${repo.folder(folder)?.name ?: ""}»")
+        if (book) addToPhoneBook(ctx, n, phone.trim().ifBlank { null })
+        ui.cs = folder ?: "all"; ui.kls = "all"
+    }
+    // как «Новый контакт» в Telegram: крестик, название, галочка; аватар рядом с именем и фамилией; карточки с пояснениями
+    ru.sguardo.app.ui.FormTop("Новый клиент", { ov.closeSheet() }, add)
+    VGap(10.dp)
+    ru.sguardo.app.ui.FormCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.padding(start = 14.dp, top = 12.dp, bottom = 12.dp)) { Avatar("$first $last".trim().ifBlank { "?" }, 64.dp, ring = Sg.c.cLow) }
+            Column(Modifier.weight(1f)) {
+                ru.sguardo.app.ui.FormField(first, { first = it }, "Имя", cap = androidx.compose.ui.text.input.KeyboardCapitalization.Words)
+                ru.sguardo.app.ui.FormField(last, { last = it }, "Фамилия", divider = true, cap = androidx.compose.ui.text.input.KeyboardCapitalization.Words)
+            }
+        }
+    }
+    VGap(16.dp)
+    ru.sguardo.app.ui.FormCard { ru.sguardo.app.ui.FormField(phone, { phone = it }, "Телефон", keyboard = KeyboardType.Phone) }
+    ru.sguardo.app.ui.FormHint("Номер нужен для WhatsApp и MAX. Для Telegram и ВК можно без него.")
+    Sect("Где общаетесь", top = 0.dp)
+    FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         listOf("telegram", "whatsapp", "instagram", "vk", "max", "avito").forEach { n -> FChip(Nets.name(n), net == n, leading = { NetDot(n, 16.dp) }) { net = n } }
     }
-    Lbl("Папка")
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Sect("Папка")
+    FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         st.folders.forEach { f -> FChip(f.name, folder == f.id, dot = folderDot(f)) { folder = f.id } }
     }
     if (classes.isNotEmpty()) {
-        Lbl("Класс")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Sect("Класс")
+        FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             classes.forEach { k -> FChip(k, kl == k) { kl = if (kl == k) null else k } }
         }
     }
     VGap(18.dp)
-    Btn("Добавить клиента", icon = "check", wide = true) {
-        val n = name.trim()
-        if (n.isEmpty()) { repo.toast("Укажите имя клиента"); return@Btn }
-        ov.closeSheet()
-        repo.act(obj("type" to "addContact", "name" to n, "phone" to phone.trim().ifBlank { null }, "network" to net, "folderId" to folder,
-            "tags" to listOfNotNull(kl?.let { CLASS_P + classKey(it) })), "$n: папка «${repo.folder(folder)?.name ?: ""}»")
-        ui.cs = folder ?: "all"; ui.kls = "all"
+    ru.sguardo.app.ui.FormCard {
+        Gi("Сохранить в контактах телефона", onClick = { book = !book }) { SgSwitch(book) { book = it } }
     }
+    VGap(16.dp)
+    ru.sguardo.app.ui.FormCard { ru.sguardo.app.ui.FormField(note, { note = it }, "Заметка (видна только вам)", singleLine = false) }
+    VGap(8.dp)
 }
 
 /** Карточка клиента без чата (лист): оплата, обещание, напоминание, занятие, папка, ответственный, заметка. */

@@ -1,5 +1,10 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
 import ru.sguardo.app.ui.groups
 import ru.sguardo.app.ui.allGroups
 import android.content.ClipData
@@ -350,39 +355,47 @@ private fun FList(items: List<Triple<String?, String, String>>, icon: String?, e
 /** Правка контакта: имя и фамилия видны только вам; можно сохранить в телефонную книгу. */
 @Composable
 fun EditContactScreen(id: String) {
-    val repo = LocalRepo.current; val nav = LocalNav.current; val ov = LocalOv.current; val perms = LocalPerms.current
+    val repo = LocalRepo.current; val nav = LocalNav.current; val ov = LocalOv.current
     val ctx = LocalContext.current
     val conv = repo.conv(id)
     val c = repo.contact(conv?.contactId)
     val parts = (c?.name ?: "").split(" ")
     var first by remember { mutableStateOf(parts.firstOrNull() ?: "") }
     var last by remember { mutableStateOf(parts.drop(1).joinToString(" ")) }
+    var note by remember { mutableStateOf(c?.note ?: "") }
     val inBook = repo.bookName(c) != null
     var book by remember { mutableStateOf(inBook) }
-    Column(Modifier.fillMaxSize().background(Sg.c.surface)) {
-        SubTopBar("Изменить контакт", { nav.back() }, backIcon = "x") {
-            IconBtn("check", {
-                val nn = "$first $last".trim()
-                if (c != null && nn.isNotEmpty() && nn != c.name) repo.act(obj("type" to "updateContact", "contactId" to c.id, "name" to nn))
-                if (book && !inBook) addToPhoneBook(ctx, nn.ifBlank { c?.name ?: "" }, c?.phone)
-                repo.toast(if (book && !inBook) "Сохранили и открыли телефонную книгу" else "Контакт сохранён")
-                nav.back()
-            })
+    val save = {
+        val nn = "$first $last".trim()
+        if (c != null && nn.isNotEmpty() && nn != c.name) repo.act(obj("type" to "updateContact", "contactId" to c.id, "name" to nn))
+        if (c != null && note.trim() != (c.note ?: "")) repo.act(obj("type" to "setNote", "contactId" to c.id, "note" to note.trim()))
+        if (book && !inBook) addToPhoneBook(ctx, nn.ifBlank { c?.name ?: "" }, c?.phone)
+        repo.toast(if (book && !inBook) "Сохранили и открыли телефонную книгу" else "Контакт сохранён")
+        nav.back()
+    }
+    // как «Изменить контакт» в Telegram: крестик и галочка, аватар по центру, карточки полей с пояснениями
+    Column(Modifier.fillMaxSize().background(Sg.c.surface).windowInsetsPadding(WindowInsets.statusBars).imePadding().padding(horizontal = 12.dp)) {
+        Box {
+            ru.sguardo.app.ui.FormTop("", { nav.back() }, save)
+            Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) { Avatar("$first $last".trim().ifBlank { c?.name ?: "" }, 104.dp, ring = Sg.c.surface) }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar(c?.name ?: "", 96.dp)
-                Btn("Выбрать фото", kind = BtnKind.Text, small = true) { repo.toast("Фото клиента приходит из мессенджера") }
+            Spacer(Modifier.height(28.dp))
+            ru.sguardo.app.ui.FormCard {
+                ru.sguardo.app.ui.FormField(first, { first = it }, "Имя", cap = KeyboardCapitalization.Words)
+                ru.sguardo.app.ui.FormField(last, { last = it }, "Фамилия", divider = true, cap = KeyboardCapitalization.Words)
             }
-            MField("Имя", first) { first = it }
-            MField("Фамилия", last) { last = it }
-            Hint("Это имя видите только вы. Клиент его не узнает.", Modifier.padding(top = 0.dp))
-            Grp {
-                Gi("Сохранить в контактах телефона", c?.phone ?: "Имя и ссылка на ${Nets.name(conv?.network ?: "")}", icon = "book") {
-                    SgSwitch(book) { book = it }
-                }
+            ru.sguardo.app.ui.FormHint("Это имя видите только вы. Клиент его не узнает.")
+            ru.sguardo.app.ui.FormCard { ru.sguardo.app.ui.FormField(note, { note = it }, "Заметка", singleLine = false) }
+            ru.sguardo.app.ui.FormHint("Заметку видите только вы и ваши сотрудники.")
+            ru.sguardo.app.ui.FormCard {
+                Gi("Сохранить в контактах телефона", c?.phone, onClick = { book = !book }) { SgSwitch(book) { book = it } }
             }
-            Btn("Удалить контакт", kind = BtnKind.Text, danger = true, modifier = Modifier.padding(16.dp)) { askDeleteChat(repo, ov, id) { nav.back(); nav.back(); nav.back() } }
+            ru.sguardo.app.ui.FormHint(if (c?.phone != null) "Имя и номер появятся в телефонной книге." else "Номера нет: сохраним имя и ссылку на ${Nets.name(conv?.network ?: "")}.")
+            ru.sguardo.app.ui.FormCard(Modifier.clickable { askDeleteChat(repo, ov, id) { nav.back(); nav.back(); nav.back() } }) {
+                T("Удалить клиента", body(16.5f), Sg.c.danger, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp))
+            }
+            Spacer(Modifier.height(30.dp))
         }
     }
 }
