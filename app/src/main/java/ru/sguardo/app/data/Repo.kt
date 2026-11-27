@@ -490,7 +490,7 @@ class Repo private constructor(val ctx: Context) {
         scope.launch { try { applyStateFrom(api.call("POST", "/api/messages/react/", obj("messageId" to id, "emoji" to (emoji ?: kotlinx.serialization.json.JsonNull)))) } catch (e: Exception) { toast(friendly(e)) } }
     }
 
-    fun pinMessage(convId: String, id: String, on: Boolean) {
+    fun pinMessage(convId: String, id: String, on: Boolean, both: Boolean = true) {
         val setLocal = {
             state.value = state.value.copy(conversations = state.value.conversations.map { c ->
                 if (c.id != convId) c else {
@@ -501,7 +501,7 @@ class Repo private constructor(val ctx: Context) {
         }
         if (demo.value) { setLocal(); toast(if (on) "Сообщение закреплено" else "Сообщение откреплено"); return }
         scope.launch {
-            try { applyStateFrom(api.call("POST", "/api/messages/pin/", obj("messageId" to id, "on" to on))); toast(if (on) "Сообщение закреплено" else "Сообщение откреплено") }
+            try { applyStateFrom(api.call("POST", "/api/messages/pin/", obj("messageId" to id, "on" to on, "both" to both))); toast(if (on) "Сообщение закреплено" else "Сообщение откреплено") }
             catch (e: Exception) { toast(friendly(e)) }
         }
     }
