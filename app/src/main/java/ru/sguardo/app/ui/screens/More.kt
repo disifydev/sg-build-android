@@ -119,56 +119,63 @@ fun MoreScreen() {
     LaunchedEffect(Unit) { repo.loadLessons(Fmt.weekStart(Clock.today())) }
     val notifOk = perms.hasNotifications()
     val bookOk = perms.hasContacts()
+    val ov = LocalOv.current
+    val wall by repo.prefs.chatWall.collectAsState()
     TabPage("Ещё", actions = { HeadActions(me = false) }) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Sg.c.cLow).clickable { nav.go("account") }.padding(14.dp),
+        // профиль, как «Мой профиль» в Telegram
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(24.dp)).background(Sg.c.cLow).clickable { nav.go("account") }.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Avatar((user?.name ?: "В").take(1), 56.dp, color = Color(0xFFC7E2D3))
+            Avatar((user?.name ?: "В").take(1), 52.dp, color = Color(0xFFC7E2D3))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 T(user?.name ?: "", body(17f, FontWeight.SemiBold))
-                T("${acc?.workspaceName?.ifBlank { null } ?: "Кабинет"} · ${if (user?.isOwner != false) "владелец" else "сотрудник"}", body(13f), Sg.c.muted)
+                T("${acc?.workspaceName?.ifBlank { null } ?: "Кабинет"} · ${if (user?.isOwner != false) "владелец" else "сотрудник"}", body(13.5f), Sg.c.muted)
             }
-            Ic("chevR", Sg.c.fg, size = 16.dp)
+            Chev()
         }
         val today = lessons.count { Clock.local(parseIso(it.startsAt)).toLocalDate() == Clock.today() && it.status == "planned" }
         val kl = remember(st, extra) { allClasses(repo, st).size }
-        Sect("Работа")
+        Spacer(Modifier.height(18.dp))
         Grp {
-            Gi("Расписание", "Сегодня $today ${Fmt.plural(today, "занятие", "занятия", "занятий")}", "cal", onClick = { nav.go("schedule") }) { Chev() }
-            Gi("Папки и классы", "${st.folders.size} ${Fmt.plural(st.folders.size, "папка", "папки", "папок")}, $kl ${Fmt.plural(kl, "класс", "класса", "классов")}, ${subjects.size} ${Fmt.plural(subjects.size, "предмет", "предмета", "предметов")}", "sliders", onClick = { nav.go("folders") }) { Chev() }
+            Gi("Расписание", icon = "cal", value = if (today > 0) "сегодня $today" else null, onClick = { nav.go("schedule") }) { Chev() }
+            Gi("Папки и классы", icon = "sliders", value = "${st.folders.size} · $kl", onClick = { nav.go("folders") }) { Chev() }
             val s = acc?.sessions ?: 1
-            Gi("Вход и устройства", "$s ${Fmt.plural(s, "активный сеанс", "активных сеанса", "активных сеансов")}", "shield", onClick = { nav.go("security") }) { Chev() }
+            Gi("Вход и устройства", icon = "shield", value = "$s", onClick = { nav.go("security") }) { Chev() }
         }
-        Sect("Уведомления")
-        Grp {
-            val toggle1 = { on: Boolean ->
-                if (on && !notifOk && perms.notificationsBlocked()) perms.openNotifySettings()
-                else if (on && !notifOk) perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); if (ok) repo.registerPushIfPossible(); repo.toast(if (ok) "Уведомления включены" else "Доступ не выдан") }
-                else { repo.prefs.setNotifyMessages(on); if (on) repo.registerPushIfPossible() else repo.unregisterPush() }
-            }
-            val ps by repo.pushStatus.collectAsState()
-            Gi("Новые сообщения", if (!notifOk && !repo.demo.value) "Выключены в настройках телефона" else if (!repo.demo.value && ps.startsWith("Недоступны")) "Уведомления $ps".replaceFirst("Уведомления Недоступны", "Уведомления недоступны") else "Имя клиента и текст сообщения", "chat", onClick = { toggle1(!(n1 && notifOk)) }) { SgSwitch(n1 && (notifOk || repo.demo.value), toggle1) }
-            Gi("Напоминания", "Об оплатах и занятиях", "bell", onClick = { repo.prefs.setNotifyReminders(!n2) }) { SgSwitch(n2) { repo.prefs.setNotifyReminders(it) } }
+        Spacer(Modifier.height(18.dp))
+        val toggle1 = { on: Boolean ->
+            if (on && !notifOk && perms.notificationsBlocked()) perms.openNotifySettings()
+            else if (on && !notifOk) perms.notifications { ok -> repo.prefs.setNotifyMessages(ok); if (ok) repo.registerPushIfPossible(); repo.toast(if (ok) "Уведомления включены" else "Доступ не выдан") }
+            else { repo.prefs.setNotifyMessages(on); if (on) repo.registerPushIfPossible() else repo.unregisterPush() }
         }
-        Sect("Телефонная книга")
+        val toggleB = { on: Boolean ->
+            if (on && !bookOk) perms.contacts { ok -> repo.prefs.setNamesFromBook(ok); repo.book.refresh(); repo.toast(if (ok) "Имена берём из контактов" else "Доступ не выдан") }
+            else { repo.prefs.setNamesFromBook(on); repo.book.refresh() }
+        }
+        val ps by repo.pushStatus.collectAsState()
         Grp {
-            val toggleB = { on: Boolean ->
-                if (on && !bookOk) perms.contacts { ok -> repo.prefs.setNamesFromBook(ok); repo.book.refresh(); repo.toast(if (ok) "Имена берём из контактов" else "Доступ не выдан") }
-                else { repo.prefs.setNamesFromBook(on); repo.book.refresh() }
-            }
-            Gi("Имена из контактов", if (!bookOk && !repo.demo.value) "Нет доступа к контактам. Нажмите, чтобы разрешить" else "Если номер клиента есть в контактах телефона, покажем имя оттуда", "book",
+            Gi("Новые сообщения", if (!notifOk && !repo.demo.value) "Выключены в настройках телефона" else if (!repo.demo.value && ps.startsWith("Недоступны")) "Уведомления $ps".replaceFirst("Уведомления Недоступны", "Уведомления недоступны") else null,
+                "chat", onClick = { toggle1(!(n1 && notifOk)) }) { SgSwitch(n1 && (notifOk || repo.demo.value), toggle1) }
+            Gi("Напоминания об оплатах", icon = "bell", onClick = { repo.prefs.setNotifyReminders(!n2) }) { SgSwitch(n2) { repo.prefs.setNotifyReminders(it) } }
+            Gi("Имена из контактов", if (!bookOk && !repo.demo.value) "Нет доступа. Нажмите, чтобы разрешить" else null, "book",
                 onClick = { toggleB(!(book && bookOk)) }) { SgSwitch(book && (bookOk || repo.demo.value), toggleB) }
         }
-        Sect("Оформление")
+        Hint("Если номер клиента записан в контактах телефона, в чатах будет имя оттуда.")
         Grp {
-            listOf(Triple("system", "Как в системе", "Светлая днём, тёмная ночью"), Triple("light", "Светлая", null), Triple("dark", "Тёмная", null)).forEach { (k, t, s) ->
-                Gi(t, s, leading = { Radio(theme == k) }, onClick = { repo.prefs.setTheme(k) })
-            }
+            val themeName = when (theme) { "light" -> "Светлая"; "dark" -> "Тёмная"; else -> "Как в системе" }
+            Gi("Тема", icon = "moon", value = themeName, onClick = {
+                ov.openSheet {
+                    ru.sguardo.app.ui.SheetTitle("Тема")
+                    Grp(Modifier.padding(bottom = 8.dp)) {
+                        listOf("system" to "Как в системе", "light" to "Светлая", "dark" to "Тёмная").forEach { (k, t) ->
+                            Gi(t, leading = { Radio(repo.prefs.theme.collectAsState().value == k) }, onClick = { repo.prefs.setTheme(k); ov.closeSheet() })
+                        }
+                    }
+                }
+            }) { Chev() }
+            Gi("Оформление чата", icon = "image", value = if (wall == "custom") "своё фото" else null, onClick = { nav.go("chatstyle") }) { Chev() }
         }
-        Grp(Modifier.padding(top = 10.dp)) {
-            Gi("Оформление чата", "Обои: готовые или своё фото", "image", onClick = { nav.go("chatstyle") }) { Chev() }
-        }
-        T("Sguardo для Android · версия ${ru.sguardo.app.BuildConfig.VERSION_NAME}", body(12f), Sg.c.faint, align = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp))
+        T("Sguardo для Android · версия ${ru.sguardo.app.BuildConfig.VERSION_NAME}", body(12f), Sg.c.faint, align = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp))
     }
 }
 

@@ -1,5 +1,6 @@
 package ru.sguardo.app.ui
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -210,11 +211,11 @@ fun HScroll(modifier: Modifier = Modifier, content: @Composable RowScope.() -> U
 @Composable
 fun Dot(color: Color, size: Dp = 9.dp, modifier: Modifier = Modifier) { Box(modifier.size(size).background(color, CircleShape)) }
 
-/** Заголовок раздела (.sect). */
+/** Подпись раздела, как в настройках Telegram: мелко, заглавными, над группой. */
 @Composable
 fun Sect(title: String, small: String? = null, top: Dp = 22.dp) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = top, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        T(title, disp(17), modifier = Modifier.weight(1f))
+    Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = top, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        T(title.uppercase(), body(12.5f, FontWeight.Medium).copy(letterSpacing = .4.sp), Sg.c.muted, modifier = Modifier.weight(1f))
         if (small != null) T(small, body(12.5f, FontWeight.Medium), Sg.c.muted)
     }
 }
@@ -316,26 +317,57 @@ fun SkelRows(n: Int, avatar: Dp = 46.dp) {
     }
 }
 
-/** Группа настроек (.grp). */
+/** Группа настроек, как в Telegram: карточка со скруглением, строки разделены тонкой линией после значка. */
+class GrpCounter { var n = 0 }
+val LocalGrp = androidx.compose.runtime.compositionLocalOf<GrpCounter?> { null }
+
 @Composable
 fun Grp(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Sg.c.cLow)) { content() }
+    val counter = remember { GrpCounter() }
+    Column(modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(24.dp)).background(Sg.c.cLow)) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalGrp provides counter) { content() }
+    }
+}
+
+/** Цвет квадратного значка по имени иконки (палитра настроек Telegram). */
+fun tileColor(icon: String): Color = when (icon) {
+    "cal", "trash", "alert" -> Color(0xFFF2564B)
+    "sliders", "chat", "msgSq" -> Color(0xFF3E8BE8)
+    "shield", "lock", "lockO" -> Color(0xFF8E8E93)
+    "bell", "bellOff", "hour", "clock" -> Color(0xFFF25F5C)
+    "book", "users", "user", "userPlus" -> Color(0xFF3FB15E)
+    "image", "moon", "smile" -> Color(0xFF34A9DE)
+    "card", "wallet", "trend" -> Color(0xFF3FA45B)
+    "mail", "link", "ext" -> Color(0xFF8B6CF0)
+    "phone", "laptop" -> Color(0xFFF2A33A)
+    "star", "bolt" -> Color(0xFFF2A33A)
+    else -> Color(0xFF5E8F86)
 }
 
 /** Строка группы (.gi). */
 @Composable
 fun Gi(title: String, sub: String? = null, icon: String? = null, leading: (@Composable () -> Unit)? = null, titleColor: Color = Sg.c.fg, center: Boolean = false,
-       onClick: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
+       onClick: (() -> Unit)? = null, value: String? = null, trailing: (@Composable () -> Unit)? = null) {
+    val grp = LocalGrp.current
+    val idx = remember { grp?.let { it.n++ } ?: 0 }
+    val inset = if (leading != null || icon != null) 62.dp else 16.dp
+    val hair = Sg.c.hair
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 54.dp).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .drawBehind { if (idx > 0) drawRect(hair, androidx.compose.ui.geometry.Offset(inset.toPx(), 0f), androidx.compose.ui.geometry.Size(size.width - inset.toPx(), .7.dp.toPx())) }
+            .padding(start = 16.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (center) Arrangement.Center else Arrangement.Start,
     ) {
-        if (leading != null) { leading(); Spacer(Modifier.width(14.dp)) }
-        else if (icon != null) { Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) { Ic(icon, Sg.c.fg, size = 16.dp) }; Spacer(Modifier.width(14.dp)) }
-        Column(if (center) Modifier.padding(vertical = 10.dp) else Modifier.weight(1f).padding(vertical = 10.dp)) {
-            T(title, body(15f), titleColor)
+        if (leading != null) { Box(Modifier.width(30.dp), contentAlignment = Alignment.Center) { leading() }; Spacer(Modifier.width(16.dp)) }
+        else if (icon != null) {
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(tileColor(icon)), contentAlignment = Alignment.Center) { Ic(icon, Color.White, size = 17.dp) }
+            Spacer(Modifier.width(16.dp))
+        }
+        Column(if (center) Modifier.padding(vertical = 11.dp) else Modifier.weight(1f).padding(vertical = 11.dp)) {
+            T(title, body(16f), titleColor)
             if (sub != null) T(sub, body(12.5f).copy(lineHeight = 17.sp), Sg.c.muted, modifier = Modifier.padding(top = 2.dp))
         }
+        if (value != null) T(value, body(15.5f), Sg.c.muted, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 6.dp))
         trailing?.invoke()
     }
 }
