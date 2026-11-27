@@ -1,5 +1,7 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.foundation.layout.heightIn
 import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.VideoView
@@ -119,30 +121,65 @@ fun DemoCam(back: Boolean, modifier: Modifier) {
  * compact — для предпросмотра (без интерактива).
  */
 @Composable
-fun Bubble(m: Message, c: Conversation, prev: Message?, compact: Boolean = false, hidden: Boolean = false, onQuote: (String) -> Unit = {}) {
+fun Bubble(m: Message, c: Conversation, prev: Message?, compact: Boolean = false, hidden: Boolean = false, next: Message? = null, onQuote: (String) -> Unit = {}) {
     val out = m.isOut
     val gap = prev != null && prev.isOut != m.isOut
-    Row(Modifier.fillMaxWidth().padding(top = if (gap) 8.dp else 0.dp).graphicsLayer { alpha = if (hidden) 0f else 1f },
+    // группа как в Telegram: подряд от одного отправителя в пределах 5 минут — внутренние углы меньше, хвостик только у последнего
+    val top = sameGroup(prev, m)
+    val bottom = sameGroup(m, next)
+    Row(Modifier.fillMaxWidth().padding(top = if (gap) 8.dp else 0.dp, start = if (out) 0.dp else 6.dp, end = if (out) 6.dp else 0.dp).graphicsLayer { alpha = if (hidden) 0f else 1f },
         horizontalArrangement = if (out) Arrangement.End else Arrangement.Start) {
-        BubbleBody(m, c, compact, onQuote)
+        BubbleBody(m, c, compact, onQuote, top = top, bottom = bottom || next == null && compact)
+    }
+}
+
+fun sameGroup(a: Message?, b: Message?): Boolean =
+    a != null && b != null && a.isOut == b.isOut && kotlin.math.abs(b.time - a.time) < 5 * 60_000 && Fmt.dayChip(a.time) == Fmt.dayChip(b.time)
+
+/** Форма пузыря: большие углы снаружи группы, маленькие внутри, у последнего — угол под хвостик. */
+fun bubbleShape(out: Boolean, top: Boolean, bottom: Boolean): RoundedCornerShape {
+    val big = 18.dp; val small = 6.dp; val tail = 4.dp
+    val sideTop = if (top) small else big
+    val sideBottom = if (bottom) small else tail
+    return if (out) RoundedCornerShape(big, sideTop, sideBottom, big) else RoundedCornerShape(sideTop, big, big, sideBottom)
+}
+
+/** Фон пузыря с хвостиком у последнего в группе (хвостик рисуется за краем, контент обрезается формой без него). */
+fun Modifier.bubbleBg(bg: Color, out: Boolean, shape: RoundedCornerShape, tail: Boolean): Modifier = this.drawBehind {
+    val o = shape.createOutline(size, layoutDirection, this)
+    drawOutline(o, bg)
+    if (tail) {
+        val w = size.width; val h = size.height; val d = density
+        val p = androidx.compose.ui.graphics.Path()
+        if (out) {
+            p.moveTo(w - 1 * d, h - 17 * d)
+            p.cubicTo(w - 1 * d, h - 6 * d, w + 2 * d, h - 1.5f * d, w + 7 * d, h)
+            p.lineTo(w - 12 * d, h); p.close()
+        } else {
+            p.moveTo(1 * d, h - 17 * d)
+            p.cubicTo(1 * d, h - 6 * d, -2 * d, h - 1.5f * d, -7 * d, h)
+            p.lineTo(12 * d, h); p.close()
+        }
+        drawPath(p, bg)
     }
 }
 
 @Composable
-fun BubbleBody(m: Message, c: Conversation, compact: Boolean = false, onQuote: (String) -> Unit = {}) {
+fun BubbleBody(m: Message, c: Conversation, compact: Boolean = false, onQuote: (String) -> Unit = {}, top: Boolean = false, bottom: Boolean = false) {
     val out = m.isOut
     val bg = if (out) Sg.c.pc else Sg.c.cHigh
     val fg = if (out) Sg.c.onPc else Sg.c.fg
-    val shape = RoundedCornerShape(20.dp, 20.dp, if (out) 6.dp else 20.dp, if (out) 20.dp else 6.dp)
+    val shape = bubbleShape(out, top, bottom)
+    val tail = !bottom
     val reaction = m.reactions?.firstOrNull()?.emoji
     when (m.kind) {
         "circle" -> CircleMsg(m, compact)
-        "voice" -> Column(Modifier.widthIn(max = 290.dp).clip(shape).background(bg).padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)) {
+        "voice" -> Column(Modifier.widthIn(max = 290.dp).bubbleBg(bg, out, shape, tail).clip(shape).padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)) {
             VoiceRow(m, out, fg)
             if (reaction != null) ReactionChip(reaction, fg)
             Row(Modifier.align(Alignment.End)) { Meta(m, fg) }
         }
-        "photo", "video" -> Column(Modifier.width(250.dp).clip(shape).background(bg).padding(4.dp)) {
+        "photo", "video" -> Column(Modifier.width(250.dp).bubbleBg(bg, out, shape, tail).clip(shape).padding(3.dp)) {
             val repo = LocalRepo.current; val ov = LocalOv.current; val ctx = LocalContext.current
             val url = imageUrl(repo, m.att)
             val demoPic = url == null || m.att?.name?.startsWith("demo:") == true
@@ -151,8 +188,8 @@ fun BubbleBody(m: Message, c: Conversation, compact: Boolean = false, onQuote: (
                 else ov.layer = { PhotoViewer(if (demoPic) null else url, m.att?.name) { ov.layer = null } }
             }
             Box {
-                if (demoPic) DemoPhoto(m.att?.name, Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)).then(open))
-                else AsyncImage(url, null, Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)).background(Sg.c.hair).then(open), contentScale = ContentScale.Crop)
+                if (demoPic) DemoPhoto(m.att?.name, Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(15.dp)).then(open))
+                else AsyncImage(url, null, Modifier.fillMaxWidth().heightIn(min = 150.dp, max = 300.dp).clip(RoundedCornerShape(15.dp)).background(Sg.c.hair).then(open), contentScale = ContentScale.Crop)
                 if (m.kind == "video") Box(Modifier.align(Alignment.Center).size(48.dp).background(Color.Black.copy(alpha = .35f), CircleShape), contentAlignment = Alignment.Center) { Ic("play", Color.White) }
             }
             Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 2.dp)) {
@@ -160,7 +197,7 @@ fun BubbleBody(m: Message, c: Conversation, compact: Boolean = false, onQuote: (
                 if (reaction != null) ReactionChip(reaction, fg)
             }
         }
-        else -> Column(Modifier.widthIn(max = 288.dp).clip(shape).background(bg).padding(horizontal = 12.dp, vertical = 7.dp)) {
+        else -> Column(Modifier.widthIn(max = 300.dp).bubbleBg(bg, out, shape, tail).clip(shape).padding(start = 11.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
             if (m.forwardedFrom != null) T("Переслано от ${m.forwardedFrom}", body(12f, FontWeight.SemiBold), fg.copy(alpha = .75f), modifier = Modifier.padding(bottom = 3.dp))
             m.replyTo?.let { r ->
                 val repo = LocalRepo.current

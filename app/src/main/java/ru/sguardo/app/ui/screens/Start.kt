@@ -208,10 +208,6 @@ fun LoginScreen() {
         }
         VGap(6.dp)
         Btn(if (mode == "password") "Войти по коду из письма" else "Войти с паролем", wide = true, kind = BtnKind.Text) { mode = if (mode == "password") "code" else "password"; err = null }
-        if (BuildConfig.DEMO_ALLOWED) {
-            VGap(18.dp)
-            Btn("Посмотреть демо", kind = BtnKind.Tonal, icon = "smile") { repo.enterDemo() }
-        }
         VGap(24.dp)
     }
 }

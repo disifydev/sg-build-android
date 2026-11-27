@@ -211,6 +211,9 @@ interface Permissions {
     fun hasCamera(): Boolean
     fun pickImage(done: (android.net.Uri?) -> Unit)
     fun pickFile(done: (android.net.Uri?) -> Unit)
+    /** несколько фото и видео сразу (системный выбор, без доступа ко всей галерее) */
+    fun pickImages(done: (List<android.net.Uri>) -> Unit) = pickImage { u -> done(listOfNotNull(u)) }
+    fun pickFiles(done: (List<android.net.Uri>) -> Unit) = pickFile { u -> done(listOfNotNull(u)) }
     fun audioBlocked(): Boolean = false
     fun cameraBlocked(): Boolean = false
     fun notificationsBlocked(): Boolean = false

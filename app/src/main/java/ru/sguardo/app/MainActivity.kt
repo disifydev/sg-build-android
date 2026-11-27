@@ -31,6 +31,9 @@ class MainActivity : ComponentActivity(), Permissions {
     private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r -> permDone?.invoke(r.values.all { it }); permDone = null }
     private val imageLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> pickDone?.invoke(u); pickDone = null }
     private val fileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u -> pickDone?.invoke(u); pickDone = null }
+    private var pickManyDone: ((List<Uri>) -> Unit)? = null
+    private val imagesLauncher = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { l -> pickManyDone?.invoke(l); pickManyDone = null }
+    private val filesLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { l -> pickManyDone?.invoke(l); pickManyDone = null }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -98,5 +101,7 @@ class MainActivity : ComponentActivity(), Permissions {
     override fun hasCamera() = granted(Manifest.permission.CAMERA)
     override fun pickImage(done: (Uri?) -> Unit) { pickDone = done; imageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     override fun pickFile(done: (Uri?) -> Unit) { pickDone = done; fileLauncher.launch(arrayOf("*/*")) }
+    override fun pickImages(done: (List<Uri>) -> Unit) { pickManyDone = done; imagesLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    override fun pickFiles(done: (List<Uri>) -> Unit) { pickManyDone = done; filesLauncher.launch(arrayOf("*/*")) }
     private fun granted(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
 }

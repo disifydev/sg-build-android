@@ -1,5 +1,7 @@
 package ru.sguardo.app.ui.screens
 
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.mutableStateListOf
 import android.app.DatePickerDialog
 import android.app.DownloadManager
 import android.app.TimePickerDialog
@@ -115,7 +117,7 @@ import kotlin.math.roundToInt
 
 private val RX = listOf("👍", "❤️", "🔥", "🙏", "😂", "👌", "🤝")
 
-private sealed class Row2 { data class Day(val label: String, val key: String) : Row2(); data class Msg(val m: Message, val prev: Message?) : Row2() }
+private sealed class Row2 { data class Day(val label: String, val key: String) : Row2(); data class Msg(val m: Message, val prev: Message?, val next: Message? = null) : Row2() }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -208,7 +210,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
         msgs.forEachIndexed { i, m ->
             val d = Fmt.dayChip(m.time)
             if (d != lastDay) { out += Row2.Day(d, "d-$i-$d"); lastDay = d }
-            out += Row2.Msg(m, msgs.getOrNull(i - 1))
+            out += Row2.Msg(m, msgs.getOrNull(i - 1), msgs.getOrNull(i + 1))
         }
         out.reversed()
     }
@@ -219,6 +221,8 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     }
     if (sel != null) BackHandler { sel = null }
 
+    // сообщения, которые уже были при открытии чата, не анимируем
+    val seenIds = remember(id) { msgs.map { it.id }.toHashSet() }
     val hub = remember(id) { PlayerHub() }
     androidx.compose.runtime.CompositionLocalProvider(LocalPlayer provides hub) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .25f * k))) {
@@ -279,15 +283,16 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
             Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
                 detectHorizontalDragGestures(onDragEnd = onBackEnd, onDragCancel = onBackEnd) { ch, dx -> if (dx > 0 || backX.value > 0) { ch.consume(); onBackDrag(dx) } }
             }) {
+                ChatWallpaper(Modifier.matchParentSize())
                 LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (typingAll[id] != null) item(key = "typing") { Row(Modifier.fillMaxWidth()) { TypingBubble() } }
                     items(rows, key = { r -> when (r) { is Row2.Day -> r.key; is Row2.Msg -> r.m.id } }) { r ->
                         when (r) {
                             is Row2.Day -> Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                                 T(r.label, body(12f, FontWeight.SemiBold), Sg.c.muted, modifier = Modifier.background(Sg.c.cHigh, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 5.dp))
                             }
-                            is Row2.Msg -> MsgRow(r.m, r.prev, conv, sel, hidden == r.m.id,
+                            is Row2.Msg -> MsgRow(r.m, r.prev, r.next, conv, sel, hidden == r.m.id, fresh = r.m.id !in seenIds && kotlin.math.abs(Clock.now() - r.m.time) < 60_000,
                                 onTap = { if (sel != null) sel = sel!!.let { s -> if (r.m.id in s) s - r.m.id else s + r.m.id } },
                                 onLong = {
                                     if (sel == null) {
@@ -346,8 +351,11 @@ fun CBar(kind: String, title: String, text: String, onClose: () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MsgRow(m: Message, prev: Message?, conv: Conversation, sel: Set<String>?, hidden: Boolean, onTap: () -> Unit, onLong: () -> Unit, onReply: () -> Unit,
+private fun MsgRow(m: Message, prev: Message?, next: Message?, conv: Conversation, sel: Set<String>?, hidden: Boolean, fresh: Boolean, onTap: () -> Unit, onLong: () -> Unit, onReply: () -> Unit,
                    onBackDrag: (Float) -> Unit, onBackEnd: () -> Unit, onQuote: (String) -> Unit, onBounds: (Float) -> Unit) {
+    // новое сообщение «прилетает» снизу, как в Telegram (своё — от поля ввода справа, входящее — слева)
+    val enter = remember { Animatable(if (fresh && Arrived.claim(m)) 0f else 1f) }
+    LaunchedEffect(Unit) { if (enter.value < 1f) enter.animateTo(1f, spring(dampingRatio = .72f, stiffness = 420f)) }
     val x = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -382,7 +390,14 @@ private fun MsgRow(m: Message, prev: Message?, conv: Conversation, sel: Set<Stri
                 Box(Modifier.padding(end = 10.dp).size(24.dp).clip(CircleShape).background(if (picked) Sg.c.teal else Color.Transparent)
                     .border(1.6.dp, if (picked) Sg.c.teal else Sg.c.faint, CircleShape), contentAlignment = Alignment.Center) { if (picked) Ic("check", Sg.c.onTeal, size = 13.dp) }
             }
-            Box(Modifier.weight(1f).offset { IntOffset(x.value.roundToInt(), 0) }) { Bubble(m, conv, prev, hidden = hidden, onQuote = onQuote) }
+            Box(Modifier.weight(1f).offset { IntOffset(x.value.roundToInt(), 0) }.graphicsLayer {
+                val e = enter.value
+                if (e < 1f) {
+                    translationY = (1f - e) * 56.dp.toPx(); alpha = e.coerceIn(0f, 1f)
+                    scaleX = .86f + .14f * e; scaleY = .86f + .14f * e
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (m.isOut) 1f else 0f, 1f)
+                }
+            }) { DustBox(Dust.ids[m.id] == true) { Bubble(m, conv, prev, hidden = hidden, next = next, onQuote = onQuote) } }
         }
         val ro = (-x.value / (55 * density.density)).coerceIn(0f, 1f)
         if (ro > 0f) Box(Modifier.align(Alignment.CenterEnd).padding(end = 2.dp).size(32.dp).graphicsLayer { alpha = ro; scaleX = .4f + ro * .6f; scaleY = .4f + ro * .6f }
@@ -502,7 +517,7 @@ fun askDeleteMsgs(ov: Overlays, repo: Repo, convId: String, ids: List<String>, m
     val own = msgs.filter { it.id in ids }.all { it.isOut }
     ov.confirm(DialogSpec(if (ids.size > 1) "Удалить ${ids.size} ${Fmt.plural(ids.size, "сообщение", "сообщения", "сообщений")}?" else "Удалить сообщение?",
         "Сообщение пропадёт из этого чата.", check = if (own) "Удалить и у собеседника" else null,
-        buttons = listOf(DialogBtn("Удалить", danger = true) { both -> repo.deleteMessages(convId, ids, both); after() })))
+        buttons = listOf(DialogBtn("Удалить", danger = true) { both -> after(); Dust.run(ids) { repo.deleteMessages(convId, ids, both) } })))
 }
 
 fun openForward(ov: Overlays, repo: Repo, fromConv: String, ids: List<String>, after: () -> Unit) {
@@ -568,47 +583,68 @@ fun openScheduledList(ov: Overlays, repo: Repo, convId: String) {
     }
 }
 
-/** Вложения: в демо — сетка фото из галереи; плитки «Галерея», «Файл», «Оплата», «Шаблон». */
+/** Вложения как в Telegram: в демо — сетка фото с выбором нескольких; внизу круглые кнопки «Галерея», «Файл», «Оплата», «Шаблон». */
 fun openAttach(ov: Overlays, repo: Repo, perms: ru.sguardo.app.ui.Permissions, ctx: Context, convId: String, onTemplate: () -> Unit) {
     ov.openSheet {
-        SheetTitle("Вложения")
+        val picked = remember { mutableStateListOf<Int>() }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SheetTitle(if (picked.isEmpty()) "Вложения" else "Выбрано: ${picked.size}")
+        }
         if (repo.demo.value) {
-            Column(Modifier.clip(RoundedCornerShape(18.dp)), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                (0 until 2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.clip(RoundedCornerShape(18.dp)), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                (0 until 2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     (0 until 3).forEach { col -> val i = row * 3 + col
-                        Box(Modifier.weight(1f).aspectRatio(1f).background(GAL[i]).clickable { ov.closeSheet(); openPhotoPreview(ov, repo, convId, null, "demo:$i") })
+                        val n = picked.indexOf(i)
+                        val k by androidx.compose.animation.core.animateFloatAsState(if (n >= 0) 1f else 0f, spring(dampingRatio = .6f, stiffness = 500f), label = "pk")
+                        Box(Modifier.weight(1f).aspectRatio(1f).clickable { if (n >= 0) picked.remove(i) else picked.add(i) }) {
+                            Box(Modifier.fillMaxSize().graphicsLayer { scaleX = 1f - .08f * k; scaleY = 1f - .08f * k }.clip(RoundedCornerShape((k * 10).dp)).background(GAL[i]))
+                            // кружок выбора с номером, как в Telegram
+                            Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp).clip(CircleShape).background(if (n >= 0) Sg.c.teal else Color.Black.copy(alpha = .18f))
+                                .border(1.6.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                                if (n >= 0) T("${n + 1}", body(12f, FontWeight.Bold), Sg.c.onTeal)
+                            }
+                        }
                     }
                 } }
             }
             Spacer(Modifier.height(14.dp))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Tile("image", "Галерея", modifier = Modifier.weight(1f)) {
-                ov.closeSheet()
-                if (repo.demo.value) openPhotoPreview(ov, repo, convId, null, "demo:0")
-                else perms.pickImage { uri ->
-                    if (uri == null) return@pickImage
-                    val got = copyToCache(ctx, uri)
-                    if (got == null) { repo.toast("Не получилось прочитать файл"); return@pickImage }
-                    val (f, name, mime) = got
-                    if (mime.startsWith("video")) repo.sendFile(convId, f, name, mime, "video") else openPhotoPreview(ov, repo, convId, Triple(f, name, mime), null)
+        androidx.compose.animation.AnimatedContent(picked.isNotEmpty(), label = "att") { many ->
+            if (many) ru.sguardo.app.ui.Btn("Далее: подпись и отправка", icon = "send", wide = true) {
+                val list = picked.map { PrepItem(null, "demo:$it", "image/jpeg") }
+                ov.closeSheet(); openMediaPrep(ov, convId, list)
+            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                AttachBtn("image", "Галерея", Color(0xFF3E8BE8)) {
+                    ov.closeSheet()
+                    if (repo.demo.value) openMediaPrep(ov, convId, listOf(PrepItem(null, "demo:0", "image/jpeg")))
+                    else perms.pickImages { uris -> if (uris.isNotEmpty()) openMediaPrep(ov, convId, prepFromUris(ctx, uris).ifEmpty { repo.toast("Не получилось прочитать файл"); emptyList() }) }
                 }
-            }
-            Tile("file", "Файл", modifier = Modifier.weight(1f)) {
-                ov.closeSheet()
-                if (repo.demo.value) repo.sendFile(convId, File(""), "Счёт_27_ноября.pdf", "application/pdf", "file")
-                else perms.pickFile { uri ->
-                    if (uri == null) return@pickFile
-                    val got = copyToCache(ctx, uri)
-                    if (got == null) repo.toast("Не получилось прочитать файл") else repo.sendFile(convId, got.first, got.second, got.third, "file")
+                AttachBtn("file", "Файл", Color(0xFF1FA39A)) {
+                    ov.closeSheet()
+                    if (repo.demo.value) repo.sendFile(convId, File(""), "Счёт_27_ноября.pdf", "application/pdf", "file")
+                    else perms.pickFiles { uris -> if (uris.isNotEmpty()) openMediaPrep(ov, convId, prepFromUris(ctx, uris).ifEmpty { repo.toast("Не получилось прочитать файл"); emptyList() }, files = true) }
                 }
+                AttachBtn("card", "Оплата", Color(0xFF3FA45B)) {
+                    val c = repo.conv(convId)
+                    if (c == null) repo.toast("Чат не найден") else ov.openSheet { PaySheet(c.contactId, "paid", title = "Записать оплату", lockClient = true) }
+                }
+                AttachBtn("bolt", "Шаблон", Color(0xFFE79A2E)) { ov.closeSheet(); onTemplate() }
             }
-            Tile("card", "Оплата", primary = true, modifier = Modifier.weight(1f)) {
-                val c = repo.conv(convId)
-                if (c == null) repo.toast("Чат не найден") else ov.openSheet { PaySheet(c.contactId, "paid", title = "Записать оплату", lockClient = true) }
-            }
-            Tile("bolt", "Шаблон", modifier = Modifier.weight(1f)) { ov.closeSheet(); onTemplate() }
         }
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+@Composable
+private fun AttachBtn(icon: String, text: String, color: Color, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val s by androidx.compose.animation.core.animateFloatAsState(if (pressed) .9f else 1f, spring(dampingRatio = .5f, stiffness = 600f), label = "ab")
+    Column(Modifier.width(76.dp).clip(RoundedCornerShape(16.dp)).clickable(interactionSource = src, indication = null, onClick = onClick).padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(56.dp).graphicsLayer { scaleX = s; scaleY = s }.clip(CircleShape).background(color), contentAlignment = Alignment.Center) { Ic(icon, Color.White) }
+        Spacer(Modifier.height(6.dp))
+        T(text, body(13f, FontWeight.Medium), Sg.c.fg)
     }
 }
 
@@ -622,22 +658,7 @@ fun copyToCache(ctx: Context, uri: Uri): Triple<File, String, String>? = try {
 } catch (_: Exception) { null }
 
 
-/** Предпросмотр фото перед отправкой: картинка и подпись, как в Telegram. */
+/** Предпросмотр фото перед отправкой: тот же экран подготовки, что и для нескольких. */
 fun openPhotoPreview(ov: Overlays, repo: Repo, convId: String, file: Triple<File, String, String>?, demoName: String?) {
-    ov.openSheet {
-        var caption by remember { mutableStateOf("") }
-        SheetTitle("Отправить фото")
-        Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(16.dp)).background(Sg.c.hair)) {
-            if (file != null) coil.compose.AsyncImage(file.first, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
-            else DemoPhoto(demoName, Modifier.fillMaxSize())
-        }
-        Spacer(Modifier.height(12.dp))
-        ru.sguardo.app.ui.SField(caption, { caption = it }, "Подпись", "edit", singleLine = false)
-        Spacer(Modifier.height(16.dp))
-        ru.sguardo.app.ui.Btn("Отправить", icon = "send", wide = true) {
-            ov.closeSheet()
-            if (file != null) repo.sendFile(convId, file.first, file.second, file.third, "image", caption = caption.trim())
-            else repo.sendFile(convId, File(""), demoName ?: "demo:0", "", "image", caption = caption.trim())
-        }
-    }
+    openMediaPrep(ov, convId, listOf(if (file != null) PrepItem(file.first, file.second, file.third) else PrepItem(null, demoName ?: "demo:0", "image/jpeg")))
 }
