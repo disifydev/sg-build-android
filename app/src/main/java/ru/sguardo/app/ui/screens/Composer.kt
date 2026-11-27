@@ -365,19 +365,19 @@ private fun BigMic(r: RecState, modifier: Modifier, onSend: () -> Unit) {
     }
     val inf = rememberInfiniteTransition(label = "lock")
     val up by inf.animateFloat(0f, -4f, infiniteRepeatable(tween(600), androidx.compose.animation.core.RepeatMode.Reverse), label = "up")
-    Box(modifier.offset(22.dp, 22.dp)) {
-        // замок над кнопкой
+    // кнопка целиком на экране (раньше вылезала за правый край)
+    Box(modifier.offset(6.dp, 16.dp)) {
         // замок над кнопкой; после фиксации на его месте пауза, как в Telegram
         val lockH by animateDpAsState(if (r.locked) 46.dp else 84.dp, label = "lh")
-        Column(Modifier.offset(x = 23.dp, y = (-(if (r.locked) 116 else 96)).dp + (r.dy * .75f).coerceAtLeast(-56f).dp).size(46.dp, lockH)
+        Column(Modifier.offset(x = 19.dp, y = (-(if (r.locked) 112 else 94)).dp + (r.dy * .75f).coerceAtLeast(-56f).dp).size(46.dp, lockH)
             .clip(RoundedCornerShape(23.dp)).background(Sg.c.cHigh).clickable(enabled = r.locked) { r.togglePause() },
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceAround) {
             AnimatedContent(if (!r.locked) "lockO" else if (r.paused) (if (r.circle) "vcirc" else "mic") else "pause", label = "lk") { k -> Ic(k, Sg.c.fg, size = if (r.locked) 20.dp else 16.dp) }
             if (!r.locked) Ic("chevU", Sg.c.fg, size = 13.dp, modifier = Modifier.offset(y = up.dp))
         }
-        Box(Modifier.size(92.dp).offset { IntOffset((r.dx * .55f * density).roundToInt(), (r.dy * .6f * density).roundToInt()) }, contentAlignment = Alignment.Center) {
-            Box(Modifier.size(116.dp).graphicsLayer { scaleX = 1f + lvl.value * .6f; scaleY = 1f + lvl.value * .6f }.background(Sg.c.teal.copy(alpha = .24f), CircleShape))
-            Box(Modifier.size(92.dp).clip(CircleShape).background(Sg.c.primary).clickable(enabled = r.locked, onClick = onSend), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(84.dp).offset { IntOffset((r.dx * .55f * density).roundToInt(), (r.dy * .6f * density).roundToInt()) }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(84.dp).graphicsLayer { val k = 1f + lvl.value * .35f; scaleX = k; scaleY = k }.background(Sg.c.teal.copy(alpha = .26f), CircleShape))
+            Box(Modifier.size(84.dp).clip(CircleShape).background(Sg.c.primary).clickable(enabled = r.locked, onClick = onSend), contentAlignment = Alignment.Center) {
                 Ic(if (r.locked) "send" else if (r.circle) "vcirc" else "mic", Sg.c.onPrimary, size = 28.dp)
             }
         }
@@ -440,11 +440,18 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
             }, 1500)
         }
     }
-    Box(Modifier.fillMaxSize().background(if (r.flash) Color(0xE6FFFAF0) else Color(0xE6060C0C)).clickable(enabled = false) {}) {
+    // фон: размытый чат (Android 12+) под полупрозрачным затемнением; при вспышке — светлый экран, как в Telegram
+    val dimA = if (Build.VERSION.SDK_INT >= 31) .55f else .86f
+    Box(Modifier.fillMaxSize().background(if (r.flash) Color(0xF2FFFAF0) else Color(0xFF060C0C).copy(alpha = dimA * appear.value.coerceIn(0f, 1f))).clickable(enabled = false) {}) {
         val t = r.elapsed(now) / 1000f
         Column(Modifier.fillMaxWidth().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars).padding(top = 70.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(296.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(276.dp).graphicsLayer { scaleX = (.12f + .88f * appear.value) * (1 - flip.value); scaleY = .12f + .88f * appear.value }
+                // круг вырастает из кнопки записи (справа снизу) в центр
+                Box(Modifier.size(276.dp).graphicsLayer {
+                    val a = appear.value
+                    scaleX = (.12f + .88f * a) * (1 - flip.value); scaleY = .12f + .88f * a
+                    translationX = (1 - a) * 150.dp.toPx(); translationY = (1 - a) * 520.dp.toPx(); alpha = a.coerceIn(0f, 1f)
+                }
                     .let { if (r.flash) it.drawBehind { drawCircle(Color.White.copy(alpha = .95f), size.minDimension / 2 + 16.dp.toPx()) } else it }
                     .clip(CircleShape)) {
                     if (demo) DemoCam(r.back, Modifier.fillMaxSize())
@@ -463,10 +470,10 @@ fun CircleRecorder(r: RecState, cam: CircleCam, demo: Boolean, onFail: (String) 
                     }
                 }
                 // кольцо вплотную к кругу: бледная дорожка и белый прогресс до 60 с, как в Telegram
-                Canvas(Modifier.size(296.dp).graphicsLayer { scaleX = .12f + .88f * appear.value; scaleY = .12f + .88f * appear.value }) {
+                Canvas(Modifier.size(296.dp).graphicsLayer { val a = appear.value; scaleX = .12f + .88f * a; scaleY = .12f + .88f * a
+                    translationX = (1 - a) * 150.dp.toPx(); translationY = (1 - a) * 520.dp.toPx(); alpha = a.coerceIn(0f, 1f) }) {
                     val sw = 3.5.dp.toPx(); val inset = sw / 2 + 1.dp.toPx()
                     val tl = Offset(inset, inset); val sz = Size(size.width - inset * 2, size.height - inset * 2)
-                    drawArc(Color.White.copy(alpha = .16f), 0f, 360f, false, tl, sz, style = Stroke(sw))
                     drawArc(Color.White, -90f, 360f * (t / 60f).coerceIn(0.004f, 1f), false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
                 }
             }

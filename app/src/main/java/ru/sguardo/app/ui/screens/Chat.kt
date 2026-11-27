@@ -237,7 +237,7 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .25f * k))) {
         Column(Modifier.fillMaxSize().graphicsLayer { translationX = k * 22 * density.density; scaleX = 1 - .1f * k; scaleY = 1 - .1f * k }
             .clip(RoundedCornerShape((k * 30).dp)).background(Sg.c.surface).imePadding()
-            .then(if (hidden != null && android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(14.dp) else Modifier)) {
+            .then(if ((hidden != null || rec.value?.circle == true) && android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(if (rec.value?.circle == true) 22.dp else 14.dp) else Modifier)) {
             // шапка
             Row(Modifier.fillMaxWidth().background(Sg.c.c).windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (sel != null) {
@@ -289,11 +289,14 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
                 T("Запланировано: ${sch.size}", body(13.5f, FontWeight.SemiBold), Sg.c.teal, modifier = Modifier.weight(1f))
                 if (sch.any { it.status == "failed" }) T("Не отправлено", body(12.5f, FontWeight.SemiBold), Sg.c.danger)
             }
+            // обои под лентой и полем ввода, как в Telegram (поле «плавает» на обоях, без тёмной плашки)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+            ChatWallpaper(Modifier.matchParentSize())
+            Column(Modifier.fillMaxSize()) {
             // лента
             Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
                 detectHorizontalDragGestures(onDragEnd = onBackEnd, onDragCancel = onBackEnd) { ch, dx -> if (dx > 0 || backX.value > 0) { ch.consume(); onBackDrag(dx) } }
             }) {
-                ChatWallpaper(Modifier.matchParentSize())
                 LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (typingAll[id] != null) item(key = "typing") { Row(Modifier.fillMaxWidth()) { TypingBubble() } }
@@ -336,6 +339,8 @@ fun ChatScreen(id: String, initialRec: RecState? = null, initialReply: String? =
                     onAttach = { openAttach(ov, repo, perms, ctx, id, onText = { t -> text.value = t; repo.saveDraft(id, t) }) { tpl = true } },
                     onLater = { if (text.value.isBlank()) repo.toast("Сначала напишите сообщение") else openLater(ov, repo, ctx, id, text.value.trim(), reply) { text.value = ""; repo.saveDraft(id, ""); reply = null } },
                     rec = rec, onRecDone = finishRec, editing = isEdit)
+            }
+            }
             }
         }
         rec.value?.let { r -> if (r.circle) CircleRecorder(r, cam, FAKE_DEVICES, onFail = { why -> repo.toast(why); cam.recording?.stop(); cam.onDone = null; rec.value = null },
