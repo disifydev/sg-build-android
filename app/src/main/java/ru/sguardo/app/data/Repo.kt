@@ -56,6 +56,8 @@ class Repo private constructor(val ctx: Context) {
     val state = MutableStateFlow(AppState())
     val user = MutableStateFlow<User?>(null)
     val account = MutableStateFlow<AccountInfo?>(null)
+    /** разделы из админки; null — ещё не загружены */
+    val modules = MutableStateFlow<ModuleFlags?>(null)
     val online = MutableStateFlow(true)
     val history = MutableStateFlow<Map<String, List<Message>>>(emptyMap())
     val hasMore = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -186,6 +188,7 @@ class Repo private constructor(val ctx: Context) {
         prefs.setOnboarded(true)
         Clock.fixed = Fixture.NOW; Clock.zone = Fixture.ZONE
         book.demo = Fixture.phoneBook
+        modules.value = ModuleFlags(schedule = true, partners = true)
         if (seed) Fixture.apply(this)
         phase.value = Phase.Ready
         load.value = Load.Ok
@@ -242,7 +245,19 @@ class Repo private constructor(val ctx: Context) {
         } catch (_: Exception) { reload() }
     }
 
-    fun loadAccount() { if (!demo.value) scope.launch { account.value = runCatching { api.get<AccountInfo>("/api/account/") }.getOrNull() } }
+    fun loadAccount() {
+        if (demo.value) { modules.value = ModuleFlags(schedule = true, partners = true); return }
+        scope.launch { account.value = runCatching { api.get<AccountInfo>("/api/account/") }.getOrNull() }
+        scope.launch { runCatching { api.get<ModulesResponse>("/api/me/modules/") }.getOrNull()?.let { modules.value = it.modules } }
+    }
+
+    /** «Партнёры» клуба за N дней; null — ошибка или нет доступа. */
+    suspend fun partners(days: Int): List<ClubPartner>? {
+        if (demo.value) { kotlinx.coroutines.delay(300); return listOf(
+            ClubPartner("p1", "Школа «Логос»", "RUB", 42, 11, 186000.0, .26), ClubPartner("p2", "Анна Морозова, психолог", "RUB", 27, 9, 94500.0, .33),
+            ClubPartner("p3", "Студия английского Hello", "RUB", 18, 4, 52000.0, .22)) }
+        return runCatching { api.get<ClubReport>("/api/partners/", mapOf("days" to days.toString())).partners }.getOrNull()
+    }
 
     suspend fun loadHistory(convId: String, older: Boolean = false) {
         if (demo.value) return

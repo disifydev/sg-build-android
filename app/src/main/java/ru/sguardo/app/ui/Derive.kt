@@ -1,5 +1,7 @@
 package ru.sguardo.app.ui
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import ru.sguardo.app.data.AppState
@@ -47,6 +49,21 @@ fun Contact.inKls(k: String) = k == "all" || (if (k.startsWith(GROUP_P)) k.remov
 fun klsTitle(k: String) = if (k.startsWith(GROUP_P)) k.removePrefix(GROUP_P) else k
 fun allGroups(r: Repo, s: AppState): List<String> = (s.contacts.flatMap { it.groups() } + r.prefs.extraGroups.value).distinct().sorted()
 fun Contact.plainTags() = tags.orEmpty().filter { !it.startsWith(CLASS_P) && !it.startsWith("группа:") }
+
+/**
+ * Показывать ли репетиторские функции (классы, группы, предметы). Включены модулем «Обучение» в админке
+ * или переключателем в «Ещё». Если не выбирали — включены, когда в кабинете уже есть классы или группы.
+ */
+@androidx.compose.runtime.Composable
+fun tutorOn(): Boolean {
+    val r = LocalRepo.current
+    val mods by r.modules.collectAsState()
+    val pref by r.prefs.tutor.collectAsState()
+    val st by r.state.collectAsState()
+    if (mods?.education == true) return true
+    pref?.let { return it }
+    return st.contacts.any { c -> c.tags.orEmpty().any { it.startsWith(CLASS_P) || it.startsWith(GROUP_P) } } || r.prefs.extraClasses.value.isNotEmpty()
+}
 
 /** Классы кабинета: из меток клиентов плюс созданные в приложении без учеников. */
 fun allClasses(r: Repo, s: AppState): List<String> {

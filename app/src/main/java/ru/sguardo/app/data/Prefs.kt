@@ -30,6 +30,8 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     val bubbleRadius = MutableStateFlow(sp.getInt("bubbleRadius", 18))
     val textScale = MutableStateFlow(sp.getFloat("textScale", 1f))
     val animations = MutableStateFlow(sp.getBoolean("animations", true))
+    /** «Функции для репетиторов» (классы, группы, предметы): null — не выбирали, тогда решаем по данным */
+    val tutor = MutableStateFlow(if (sp.contains("tutor")) sp.getBoolean("tutor", true) else null)
     val onboarded = MutableStateFlow(sp.getBoolean("onboarded", false))
     val namesFromBook = MutableStateFlow(sp.getBoolean("book", true))
     val notifyMessages = MutableStateFlow(sp.getBoolean("n1", true))
@@ -55,6 +57,7 @@ class Prefs(context: Context, private val memory: Boolean = false) {
     fun setBubbleRadius(v: Int) { bubbleRadius.value = v; sp.edit().putInt("bubbleRadius", v).apply() }
     fun setTextScale(v: Float) { textScale.value = v; sp.edit().putFloat("textScale", v).apply() }
     fun setAnimations(v: Boolean) { animations.value = v; sp.edit().putBoolean("animations", v).apply() }
+    fun setTutor(v: Boolean) { tutor.value = v; sp.edit().putBoolean("tutor", v).apply() }
     fun setOnboarded(v: Boolean) { onboarded.value = v; sp.edit().putBoolean("onboarded", v).apply() }
     fun setNamesFromBook(v: Boolean) { namesFromBook.value = v; sp.edit().putBoolean("book", v).apply() }
     fun setNotifyMessages(v: Boolean) { notifyMessages.value = v; sp.edit().putBoolean("n1", v).apply() }

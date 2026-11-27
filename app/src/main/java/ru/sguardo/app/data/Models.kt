@@ -208,6 +208,19 @@ data class MeResponse(val user: User)
 @Serializable
 data class HistoryResponse(val messages: List<Message> = emptyList(), val hasMore: Boolean = false, val total: Int = 0)
 
+/** Разделы, которые админ включает кабинету (GET /api/me/modules). education — будущий модуль «Обучение» (классы, предметы). */
+@Serializable
+data class ModuleFlags(val outreach: Boolean = false, val schedule: Boolean = false, val partners: Boolean = false, val education: Boolean? = null)
+
+@Serializable
+data class ModulesResponse(val modules: ModuleFlags = ModuleFlags())
+
+@Serializable
+data class ClubPartner(val id: String, val name: String, val currency: String = "RUB", val leads: Int = 0, val payments: Int = 0, val revenue: Double = 0.0, val conversion: Double = 0.0)
+
+@Serializable
+data class ClubReport(val partners: List<ClubPartner> = emptyList())
+
 @Serializable
 data class AccountInfo(
     val name: String? = null,

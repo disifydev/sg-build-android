@@ -268,6 +268,7 @@ fun MainNav(ui: UiState) {
             composable("folders") { FoldersScreen() }
             composable("chatstyle") { ru.sguardo.app.ui.screens.ChatStyleScreen() }
             composable("appearance") { ru.sguardo.app.ui.screens.AppearanceScreen() }
+            composable("partners") { ru.sguardo.app.ui.screens.PartnersScreen() }
             composable("lists") { ListsScreen() }
             composable("staff") { StaffScreen() }
             composable("account") { AccountScreen() }

@@ -121,6 +121,9 @@ fun MoreScreen() {
     val bookOk = perms.hasContacts()
     val ov = LocalOv.current
     val wall by repo.prefs.chatWall.collectAsState()
+    val mods by repo.modules.collectAsState()
+    val tutor = ru.sguardo.app.ui.tutorOn()
+    val tutorPref by repo.prefs.tutor.collectAsState()
     TabPage("Ещё", actions = { HeadActions(me = false) }) {
         // профиль, как «Мой профиль» в Telegram
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(24.dp)).background(Sg.c.cLow).clickable { nav.go("account") }.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -138,7 +141,8 @@ fun MoreScreen() {
         Spacer(Modifier.height(18.dp))
         Grp {
             Gi("Расписание", icon = "cal", value = if (today > 0) "сегодня $today" else null, onClick = { nav.go("schedule") }) { Chev() }
-            Gi("Папки и классы", icon = "sliders", value = "${st.folders.size} · $kl", onClick = { nav.go("folders") }) { Chev() }
+            Gi(if (tutor) "Папки и классы" else "Папки", icon = "sliders", value = if (tutor) "${st.folders.size} · $kl" else "${st.folders.size}", onClick = { nav.go("folders") }) { Chev() }
+            if (mods?.partners == true) Gi("Партнёры", icon = "users", onClick = { nav.go("partners") }) { Chev() }
             val s = acc?.sessions ?: 1
             Gi("Вход и устройства", icon = "shield", value = "$s", onClick = { nav.go("security") }) { Chev() }
         }
@@ -161,6 +165,12 @@ fun MoreScreen() {
                 onClick = { toggleB(!(book && bookOk)) }) { SgSwitch(book && (bookOk || repo.demo.value), toggleB) }
         }
         Hint("Если номер клиента записан в контактах телефона, в чатах будет имя оттуда.")
+        Grp {
+            val byAdmin = mods?.education == true
+            Gi("Функции для репетиторов", if (byAdmin) "Включены для вашего кабинета" else null, icon = "book",
+                onClick = { if (!byAdmin) repo.prefs.setTutor(!tutor) }) { SgSwitch(tutor) { if (!byAdmin) repo.prefs.setTutor(it) } }
+        }
+        Hint("Классы, группы и предметы: фильтр «Все классы», класс в карточке ученика. Расписание доступно всем.")
         Grp {
             Gi("Оформление", icon = "image", value = when (theme) { "light" -> "светлая"; "dark" -> "тёмная"; else -> null }, onClick = { nav.go("appearance") }) { Chev() }
         }
@@ -439,7 +449,8 @@ fun FoldersScreen() {
     var dragIdx by remember { mutableIntStateOf(-1) }
     var dragDy by remember { mutableFloatStateOf(0f) }
     Column(Modifier.fillMaxSize().background(Sg.c.surface)) {
-        SubTopBar("Папки и классы", { nav.back() })
+        val tutorF = ru.sguardo.app.ui.tutorOn()
+        SubTopBar(if (tutorF) "Папки и классы" else "Папки", { nav.back() })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Sect("Папки", top = 4.dp)
             Hint("Папка показывает, на каком этапе клиент. Потяните за точки слева, чтобы поменять порядок. Нажмите на папку, чтобы переименовать или сменить цвет.")
@@ -480,7 +491,7 @@ fun FoldersScreen() {
                 }
             }
             Box(Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.Center) { Btn("Создать папку", icon = "plus", kind = BtnKind.Tonal) { ov.openSheet { FolderSheet(null) } } }
-            ClassesSection()
+            if (tutorF) ClassesSection() else Spacer(Modifier.height(40.dp))
         }
     }
 }

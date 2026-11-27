@@ -155,10 +155,11 @@ fun ProfileScreen(id: String) {
                         } }
                     }
                 }
-                // класс
+                // класс (репетиторская функция)
+                val tutorP = ru.sguardo.app.ui.tutorOn()
                 var kOpen by remember { mutableStateOf(false) }
                 val cls = c?.classes()?.firstOrNull()
-                Box {
+                if (tutorP) Box {
                     IRowCustom("класс", onClick = { kOpen = true }) { T(cls ?: "Не указан", body(15.5f), if (cls == null) Sg.c.faint else Sg.c.fg) }
                     DropdownMenu(kOpen, { kOpen = false }, containerColor = Sg.c.c, shape = RoundedCornerShape(6.dp)) {
                         allClasses(repo, st).forEach { k -> MenuItem(k, if (k == cls) "check" else null) {
@@ -172,7 +173,7 @@ fun ProfileScreen(id: String) {
                 var gOpen by remember { mutableStateOf(false) }
                 val myGroups = c?.groups().orEmpty()
                 val groupsAll = allGroups(repo, st)
-                if (groupsAll.isNotEmpty() || myGroups.isNotEmpty()) Box {
+                if (tutorP && (groupsAll.isNotEmpty() || myGroups.isNotEmpty())) Box {
                     IRowCustom("группа", onClick = { gOpen = true }) { T(myGroups.joinToString(", ").ifBlank { "Не указана" }, body(15.5f), if (myGroups.isEmpty()) Sg.c.faint else Sg.c.fg) }
                     DropdownMenu(gOpen, { gOpen = false }, containerColor = Sg.c.c, shape = RoundedCornerShape(6.dp)) {
                         groupsAll.forEach { g -> val on = g in myGroups; MenuItem(g, if (on) "check" else null) {

@@ -164,6 +164,8 @@ class ShotsTest(private val theme: String) {
     @Test fun s38c_files_prep() { openMediaPrep(ov, "anna", listOf(PrepItem(null, "Счёт_27_ноября.pdf", "application/pdf"), PrepItem(null, "Конспект.docx", "application/msword")), files = true); shot("38c_files_prep") { ChatScreen("anna") } }
     @Test fun s39b_chat_style() = shot("39b_chat_style") { ru.sguardo.app.ui.screens.ChatStyleScreen() }
     @Test fun s39c_appearance() = shot("39c_appearance") { androidx.compose.runtime.CompositionLocalProvider(ru.sguardo.app.ui.screens.LocalChatStyle provides ru.sguardo.app.ui.screens.rememberChatStyle()) { ru.sguardo.app.ui.screens.AppearanceScreen() } }
+    @Test fun s39d_partners() = shot("39d_partners") { ru.sguardo.app.ui.screens.PartnersScreen() }
+    @Test fun s27b_new_client_full() = shot("27b_new_client") { ru.sguardo.app.ui.screens.ClientsScreen() }
     @Test fun s39_later() { openLater(ov, repo, ApplicationProvider.getApplicationContext(), "anna", "Пришлю ссылку", null) {}; shot("39_sheet_send_later") { ChatScreen("anna") } }
     @Test fun s40_rec_voice() = shot("40_recording_voice") { ChatScreen("maria", initialRec = RecState(false, System.currentTimeMillis() - 3200).also { it.dx = -30f }) }
     @Test fun s41_rec_circle() = shot("41_recording_circle") { ChatScreen("maria", initialRec = RecState(true, System.currentTimeMillis() - 4000).also { it.locked = true }) }

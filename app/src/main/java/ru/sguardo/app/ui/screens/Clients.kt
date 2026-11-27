@@ -124,7 +124,7 @@ fun ClientsScreen() {
                 MTabs(listOf("all" to "Все") + st.folders.map { it.id to it.name }, ui.cs, counts = counts, extra = { k ->
                     if (k != "all") { Dot(folderDot(repo.folder(k))); Spacer(Modifier.width(6.dp)) }
                 }) { ui.cs = it }
-                HScroll(Modifier.padding(top = 10.dp, bottom = 2.dp)) {
+                if (ru.sguardo.app.ui.tutorOn()) HScroll(Modifier.padding(top = 10.dp, bottom = 2.dp)) {
                     Chip("Все классы", on = ui.kls == "all", check = true) { ui.kls = "all" }
                     classes.forEach { k -> Chip(k, on = ui.kls == k, check = true) { ui.kls = k } }
                     groups.forEach { g -> Chip(g, on = ui.kls == GROUP_P + g, check = true) { ui.kls = GROUP_P + g } }
@@ -230,7 +230,7 @@ fun ColumnScope.NewClientSheet() {
     FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         st.folders.forEach { f -> FChip(f.name, folder == f.id, dot = folderDot(f)) { folder = f.id } }
     }
-    if (classes.isNotEmpty()) {
+    if (classes.isNotEmpty() && ru.sguardo.app.ui.tutorOn()) {
         Sect("Класс")
         FlowRow(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             classes.forEach { k -> FChip(k, kl == k) { kl = if (kl == k) null else k } }

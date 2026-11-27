@@ -260,7 +260,7 @@ private fun FilterChips() {
                 MenuItem("Настроить папки и классы", "sliders") { foldOpen = false; nav.go("folders") }
             }
         }
-        Box {
+        if (ru.sguardo.app.ui.tutorOn()) Box {
             Chip(if (ui.mkls == "all") "Все классы" else klsTitle(ui.mkls), on = ui.mkls != "all", trailingIcon = "chevD") { klsOpen = true }
             DropdownMenu(klsOpen, { klsOpen = false }, containerColor = Sg.c.c, shape = RoundedCornerShape(6.dp)) {
                 MenuItem("Все классы", if (ui.mkls == "all") "check" else "grid") { ui.mkls = "all"; klsOpen = false }
